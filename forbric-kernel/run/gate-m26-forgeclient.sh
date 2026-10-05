@@ -54,7 +54,7 @@ PY_STAGE
 # CLIENT_CANARY_STAGE_END
 # Skip the first-run accessibility screen so quick-play can reach the saved world.
 # M26_OPTIONS_BEGIN — the default canary key is F7; this persisted F6 must survive late registration.
-python3 - "${MERGED:-$RUN_OLD/merged-base/patched-mc-merged-$MC_VER.jar}" "$RUNDIR/options.txt" <<'PY_OPTIONS' || exit 3
+python3 - "${MERGED:-$RUN_OLD/merged-base/patched-mc-merged-${MC_VER:-26.2}.jar}" "$RUNDIR/options.txt" <<'PY_OPTIONS' || exit 3
 import json, sys, zipfile
 from pathlib import Path
 with zipfile.ZipFile(sys.argv[1]) as game:

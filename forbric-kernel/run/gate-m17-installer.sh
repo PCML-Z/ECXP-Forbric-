@@ -44,8 +44,8 @@ step "install into an empty directory"
 rm -rf "$DEST"
 mkdir -p "$DEST"
 # The base version is copied rather than re-downloaded: this gate is about the installer, not about Mojang's CDN.
-mkdir -p ""versions/$MC_VER""
-cp "$MC/versions/$MC_VER/$MC_VER.json" "$MC/versions/$MC_VER/$MC_VER.jar" ""versions/$MC_VER"/" 2>/dev/null || true
+mkdir -p "$DEST/versions/$MC_VER"
+cp "$MC/versions/$MC_VER/$MC_VER.json" "$MC/versions/$MC_VER/$MC_VER.jar" "$DEST/versions/$MC_VER/" 2>/dev/null || true
 java -jar "$JAR" --dir "$DEST" --mc "$MC_VER" > "$LOG" 2>&1
 INSTALL_RC=$?
 sed 's/^/[kernel]   /' "$LOG" | cut -c1-180
