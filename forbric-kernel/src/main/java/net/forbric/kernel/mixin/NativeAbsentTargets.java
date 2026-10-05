@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -143,8 +144,47 @@ import net.forbric.kernel.util.ForbricLog;
  * report. {@code -Dforbric.mixinFit.nativeAbsent=off} counts every such target as a miss again, as before.
  */
 public final class NativeAbsentTargets {
-	/** The shipped table; NativeOnlyMethodsCensusTest pins it to the staged jars. */
+	/**
+	 * The shipped table; NativeOnlyMethodsCensusTest pins it to the staged jars.
+	 *
+	 * <p>The rows are one generation's measurement: every signature in the file was read out of THAT generation's
+	 * carrier, and the trailing {@code platform … minecraft=<v>} lines record which. So the file is selected by the
+	 * running Minecraft version — see {@link #tableResource()}. A generation with no table of its own falls back to
+	 * the default one, which is the 26.2 measurement; {@link #shipped()} says so out loud rather than letting a
+	 * 1.21.x run quietly judge its mods against 26.2 rows.
+	 */
 	static final String TABLE = "/net/forbric/kernel/mixin/native-only-methods.txt";
+
+	/**
+	 * {@code -Dforbric.nativeAbsentTable=<path>}: an absolute-in-jar path or a filesystem path, overriding the
+	 * per-generation pick. The escape hatch for a generation whose table is being re-measured and is not committed
+	 * yet, and for bisecting the judgement itself.
+	 */
+	static final String TABLE_PROPERTY = "forbric.nativeAbsentTable";
+
+	/** The generation whose table is committed, and the fallback when a generation has none. */
+	static final String DEFAULT_TABLE_GENERATION = "26.2";
+
+	/**
+	 * The Minecraft version the rows must describe, from {@code -Dforbric.mcVersion} — the same property the loader
+	 * reads and the launch scripts already set. Unset means the default generation.
+	 */
+	static String runningGeneration() {
+		String v = System.getProperty("forbric.mcVersion", "");
+		return v == null || v.isBlank() ? DEFAULT_TABLE_GENERATION : v.strip();
+	}
+
+	/**
+	 * The table this generation should be judged against: the override if one is set, else the generation's own
+	 * {@code native-only-methods-<version>.txt}, else the default table.
+	 */
+	static String tableResource() {
+		String override = System.getProperty(TABLE_PROPERTY, "");
+		if (override != null && !override.isBlank()) return override.strip();
+		String generation = runningGeneration();
+		if (DEFAULT_TABLE_GENERATION.equals(generation)) return TABLE;
+		return "/net/forbric/kernel/mixin/native-only-methods-" + generation + ".txt";
+	}
 
 	/** {@code -Dforbric.mixinFit.nativeAbsent=off}: a target the platform lacks too is a missing anchor again. */
 	static final String PROPERTY = "forbric.mixinFit.nativeAbsent";
@@ -338,25 +378,58 @@ public final class NativeAbsentTargets {
 		return null;
 	}
 
-	/** The shipped table, read once; an unreadable table is empty, which makes every miss the merge's again. */
+	/** The table for the running generation, read once; an unreadable table is empty, so every miss is the merge's again. */
 	static Table shipped() {
 		Table loaded = shipped;
 		if (loaded != null) return loaded;
+		String resource = tableResource();
 		List<String> lines = new ArrayList<>();
-		try (InputStream in = NativeAbsentTargets.class.getResourceAsStream(TABLE)) {
-			if (in == null) {
-				ForbricLog.warn("[Forbric/Mixin] %s is missing; no injector target is judged absent from a mod's own platform", TABLE);
+		byte[] bytes = readTable(resource);
+		if (bytes == null) {
+			// A generation with no table of its own falls back to the committed one, loudly: the rows then describe
+			// a different game, and saying so is the difference between "re-measure this" and a silent wrong answer.
+			if (!TABLE.equals(resource)) {
+				ForbricLog.warn("[Forbric/Mixin] no native-absent table for Minecraft %s (%s is missing); falling back to "
+						+ "the %s table. Its rows were measured against %s, so injector targets are being judged against "
+						+ "the wrong game — re-measure them for %s, or point -D%s at a table that fits.",
+						runningGeneration(), resource, DEFAULT_TABLE_GENERATION, DEFAULT_TABLE_GENERATION,
+						runningGeneration(), TABLE_PROPERTY);
+				bytes = readTable(TABLE);
+			}
+			if (bytes == null) {
+				ForbricLog.warn("[Forbric/Mixin] %s is missing; no injector target is judged absent from a mod's own platform", resource);
 				shipped = Table.EMPTY;
 				return Table.EMPTY;
 			}
-			lines.addAll(List.of(new String(in.readAllBytes(), StandardCharsets.UTF_8).split("\n")));
-		} catch (IOException unreadable) {
-			ForbricLog.warn("[Forbric/Mixin] could not read %s; no injector target is judged absent from a mod's own platform", TABLE);
-			shipped = Table.EMPTY;
-			return Table.EMPTY;
+			resource = TABLE;
 		}
+		lines.addAll(List.of(new String(bytes, StandardCharsets.UTF_8).split("\n")));
 		shipped = loaded = Table.parse(lines);
+		if (!TABLE.equals(resource)) {
+			ForbricLog.info("[Forbric/Mixin] native-absent table for Minecraft %s: %s (%d rows)",
+					runningGeneration(), resource, loaded.platforms().size());
+		}
 		return loaded;
+	}
+
+	/**
+	 * The table's bytes, from the jar when {@code resource} names one and from disk when it names a file. The
+	 * override property takes either, so a table still being measured can be pointed at without rebuilding.
+	 */
+	private static byte[] readTable(String resource) {
+		try (InputStream in = NativeAbsentTargets.class.getResourceAsStream(resource)) {
+			if (in != null) return in.readAllBytes();
+		} catch (IOException unreadable) {
+			return null;
+		}
+		// Not in the jar: try it as a path, so a re-measured table can be dropped in without a rebuild.
+		try {
+			Path onDisk = Path.of(resource);
+			if (Files.isRegularFile(onDisk)) return Files.readAllBytes(onDisk);
+		} catch (IOException | RuntimeException notAPath) {
+			// Not a usable path either; the caller reports the resource name it could not read.
+		}
+		return null;
 	}
 
 	/**
