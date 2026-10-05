@@ -169,7 +169,7 @@ public final class SuppliedArtifactContentTest {
 			require(expected.getMessage().contains("not the game files Forbric needs"),
 					"refused for the wrong reason (was the base version read first?): " + expected.getMessage());
 		}
-		require(!Files.exists(mcDir.resolve("versions/26.2-forbric")), "a profile directory was written");
+		require(!Files.exists(mcDir.resolve("versions/26.2" + Installer.PROFILE_SUFFIX)), "a profile directory was written");
 		require(!Files.exists(mcDir.resolve("libraries")), "something was staged into libraries/");
 		require(!Files.exists(mcDir.resolve(".forbric-build")), "the link-check tools were unpacked for a refused set");
 		checks++;

@@ -68,7 +68,7 @@ final class Doctor {
 	 * @param artifactDir where prebuilt game artifacts may already be, or null
 	 */
 	Report examine(Path mcDir, Path explicitJdk, Path artifactDir, String mcVersion) {
-		log.accept("Forbric installer — toolchain check");
+		log.accept("ECXP-Forbric+ — toolchain check");
 		log.accept("");
 
 		log.accept("platform      : " + System.getProperty("os.name") + " " + System.getProperty("os.arch"));

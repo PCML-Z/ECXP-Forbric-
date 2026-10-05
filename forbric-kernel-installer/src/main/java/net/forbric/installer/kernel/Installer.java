@@ -43,6 +43,11 @@ import java.util.function.Consumer;
  */
 public final class Installer {
 	static final String MAIN_CLASS = "net.forbric.kernel.boot.KernelClientLaunch";
+	/**
+	 * Profile id suffix. Upstream Forbric writes {@code <mc>-forbric}; this tree writes
+	 * {@code <mc>-ecxp-forbric} so the two installs can sit side by side.
+	 */
+	static final String PROFILE_SUFFIX = "-ecxp-forbric";
 	private static final String BUNDLE_MANIFEST = "/forbric-kernel-libraries.json";
 	private static final String LIBRARY_DIR = "${library_directory}";
 
@@ -74,7 +79,7 @@ public final class Installer {
 			throws IOException {
 		Path versions = mcDir.resolve("versions");
 		Path libraries = mcDir.resolve("libraries");
-		String id = mcVersion + "-forbric";
+		String id = mcVersion + PROFILE_SUFFIX;
 
 		log.accept("Minecraft directory: " + mcDir);
 
@@ -105,7 +110,7 @@ public final class Installer {
 		Path mods = mcDir.resolve("mods");
 		Files.createDirectories(mods);
 		log.accept("");
-		log.accept("Installed. In your launcher, pick the version \"" + id + "\".");
+		log.accept("Installed ECXP-Forbric+. In your launcher, pick the version \"" + id + "\".");
 		log.accept("Fabric, MinecraftForge and NeoForge mods all go in " + mods
 				+ " (a launcher with per-version isolation uses versions/" + id + "/mods instead).");
 		return id;

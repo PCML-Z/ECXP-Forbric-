@@ -83,7 +83,7 @@ Gradle also accepts `-Pforbric.python=<executable>`, `-Pforbric.instance=<direct
 | `python3 tools/dev.py tool-test` / `./gradlew toolTest` | Development, evidence, soak and world-parity tools' self-tests; no game jars required |
 | `python3 tools/dev.py integration` / `./gradlew integrationTest` | Unit, transfer and tool suites with strict enforcement: missing game inputs, zero tests or **any skipped assertion fail** |
 | `python3 tools/dev.py gate --gate m0` | Existing full staged-build/discovery/link/oracle gate, using its documented mod sets |
-| `python3 tools/dev.py gate --gate m33-transfer` | A particular real-instance gate; [the gate table](../../introduction.md#16-build-and-test) lists coverage |
+| `python3 tools/dev.py gate --gate m33-transfer` | A particular real-instance gate; [the gate table](../../docs/introduction.md#16-build-and-test) lists coverage |
 
 Gradle prints test and skip counts, and HTML reports live in `forbric-kernel/build/reports/tests/`.
 A boot-only build cannot prove the game or mods work. `integration` prepares the base game automatically,
@@ -115,7 +115,7 @@ change makes a test skip there, or stop skipping, update that file in the same c
 | `forbric-kernel/build/` | Build outputs, test reports and gate logs |
 | `forbric-loader/src/tools/` | Shared standalone merge/link tools; no bootstrap required for `mergeToolsJar` |
 | `forbric-kernel-installer/` | Current player installer and the artifact pipeline reused by `devToolsJar` |
-| `forbric-loader/run/launch-*.sh`, `forbric-installer/` | First-generation boot and installer paths |
+| `forbric-loader/run/launch-*.sh`, `legacy/forbric-installer/` | First-generation boot and installer paths |
 
 Keep new probes under `forbric-kernel/canary/` and verification tools under `run/compat/`, rather than
 inside an instance directory. The old scripts retain their paths because existing gates and external

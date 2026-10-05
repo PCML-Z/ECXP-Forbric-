@@ -4,7 +4,7 @@ English | [简体中文](introduction.zh-CN.md)
 
 For mod and loader developers. This document is precise rather than gentle: it states what Forbric does, in the
 order it does it, naming the real types and files. It describes the **`main` branch**, not a release; for what a
-release contains and how a player installs it, read the [README](README.md).
+release contains and how a player installs it, read the [README](../README.md).
 
 > **Which code this describes.** The repository holds two generations. `forbric-kernel/` — the *sovereign
 > kernel* — is what `main` ships and what `forbric-kernel-installer/` installs; it is the subject of this document.
@@ -1044,17 +1044,18 @@ version is installed, pins, which artifacts are present or will be built, expect
 
 Its own boot path (Knot host, eight fabric-loader substrate patches applied by `bootstrap.sh`) is not used by the
 kernel. The weld's design is documented in `forbric-loader/README.md` and `forbric-loader/run/README.md`.
-`forbric-installer/` is the weld's installer and is not the one released.
+`legacy/forbric-installer/` is the weld's installer and is not the one released.
 
 ## 15. Repository layout
 
 ```
-Forbric/
-├── README.md                      player-facing, describes the latest release
-├── introduction.md                this document, describes main
+ECXP-Forbric+/
+├── README.md                      player-facing entry for this fork
+├── docs/introduction.md           this document
+├── docs/MULTIVERSION_PLAN.md      26.2 / 1.21.8 / 1.21.1 pin plan
 ├── LICENSE, NOTICE
 ├── bootstrap.sh                   clones ./fabric-loader for forbric-loader (not needed by the kernel)
-├── MOD_TEST_FAILURES.md           per-mod compatibility results (Chinese)
+├── docs/MOD_TEST_FAILURES.md      per-mod compatibility results (Chinese)
 ├── .github/workflows/build.yml    CI: job `build` (bootstrap + forbric-loader) and job `kernel`
 │
 ├── forbric-kernel/                THE KERNEL — own Gradle build and wrapper
@@ -1076,7 +1077,7 @@ Forbric/
 ├── forbric-kernel-installer/      THE INSTALLER — src/main/java/net/forbric/installer/kernel/, packaging/
 │
 ├── forbric-loader/                first generation; merge tools + artifact pipeline (§14)
-├── forbric-installer/             the first generation's installer
+├── legacy/forbric-installer/      the first generation's installer, not released
 └── fabric-loader/                 gitignored upstream checkout for forbric-loader
 ```
 
@@ -1087,7 +1088,7 @@ It prepares isolated game inputs under `forbric-kernel/.dev/` with the installer
 libraries/assets and the pinned compile APIs, then builds and launches the current kernel. JDK 25+ and
 Python 3.9+ are required. Gradle exposes `prepareDev`, `runClient`, `runServer` and `devDoctor`; preparation
 and launch must be separate Gradle invocations because the game-side wiring is configured before tasks run.
-See [the development guide](forbric-kernel/run/README.md) for commands and configuration.
+See [the development guide](../forbric-kernel/run/README.md) for commands and configuration.
 
 `check` also runs development/evidence-tool self-tests and the packaged link gate's synthetic controls.
 `integrationTest` requires the staged game and transfer suites and rejects any skipped test; ordinary `test`
@@ -1280,10 +1281,10 @@ Break one and the failure usually surfaces far from the cause.
 
 ## 20. Further reading
 
-- [`forbric-kernel/README.md`](forbric-kernel/README.md) — the kernel's own summary and gate notes
-- [`forbric-kernel/run/compat/PROTOCOL.md`](forbric-kernel/run/compat/PROTOCOL.md) — the compatibility sweep procedure
-- [`forbric-loader/README.md`](forbric-loader/README.md), [`forbric-loader/run/README.md`](forbric-loader/run/README.md) — the first generation and the artifact pipeline
-- [`forbric-loader/CREDITS.md`](forbric-loader/CREDITS.md), [`forbric-loader/MAPPINGS.md`](forbric-loader/MAPPINGS.md) — the clean-room boundary and mapping position
+- [`forbric-kernel/README.md`](../forbric-kernel/README.md) — the kernel's own summary and gate notes
+- [`forbric-kernel/run/compat/PROTOCOL.md`](../forbric-kernel/run/compat/PROTOCOL.md) — the compatibility sweep procedure
+- [`forbric-loader/README.md`](../forbric-loader/README.md), [`forbric-loader/run/README.md`](../forbric-loader/run/README.md) — the first generation and the artifact pipeline
+- [`forbric-loader/CREDITS.md`](../forbric-loader/CREDITS.md), [`forbric-loader/MAPPINGS.md`](../forbric-loader/MAPPINGS.md) — the clean-room boundary and mapping position
 - The class javadoc. Almost every class under `net.forbric.kernel` opens with the failure it exists for.
 
 Forbric is not affiliated with Mojang, FabricMC, MinecraftForge or NeoForged.

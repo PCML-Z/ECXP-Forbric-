@@ -471,17 +471,18 @@ forge-runtime ──────────────────────
 - **测试输入。** `run/livemod-src*`/`testmod-src` 里的金丝雀 mod 源码（`build-testmods.sh`），以及它各个运行目录里的 mod 集合，供 gate-m0 的发现对照基准读取。
 - **安装器载荷。** 安装器的打包清单里仍有 `net.forbric:forbric-loader` 和 `net.forbric:forbricruntime`，所以安装好的版本配置会把它们列为库。内核代码没有提到任何 `net.forbric.loader` 类，唯一的引用是 §6 里的重定向。
 
-`forbric-loader/` 自己的引导路径（Knot 宿主，加上 `bootstrap.sh` 打上的八个 fabric-loader 底座补丁）内核并不使用。焊接方案的设计记录在 `forbric-loader/README.md` 和 `forbric-loader/run/README.md` 里。`forbric-installer/` 是焊接方案的安装器，不是发布出去的那一个。
+`forbric-loader/` 自己的引导路径（Knot 宿主，加上 `bootstrap.sh` 打上的八个 fabric-loader 底座补丁）内核并不使用。焊接方案的设计记录在 `forbric-loader/README.md` 和 `forbric-loader/run/README.md` 里。`legacy/forbric-installer/` 是焊接方案的安装器，不是发布出去的那一个。
 
 ## 15. 仓库结构
 
 ```
-Forbric/
-├── README.md                      player-facing, describes the latest release
-├── introduction.md                this document, describes main
+ECXP-Forbric+/
+├── README.md                      本仓库的玩家入口
+├── docs/introduction.zh-CN.md     本文
+├── docs/MULTIVERSION_PLAN.md      26.2 / 1.21.8 / 1.21.1 的 pin 计划
 ├── LICENSE, NOTICE
 ├── bootstrap.sh                   clones ./fabric-loader for forbric-loader (not needed by the kernel)
-├── MOD_TEST_FAILURES.md           per-mod compatibility results (Chinese)
+├── docs/MOD_TEST_FAILURES.md      per-mod compatibility results (Chinese)
 ├── .github/workflows/build.yml    CI: job `build` (bootstrap + forbric-loader) and job `kernel`
 │
 ├── forbric-kernel/                THE KERNEL — own Gradle build and wrapper
@@ -503,13 +504,13 @@ Forbric/
 ├── forbric-kernel-installer/      THE INSTALLER — src/main/java/net/forbric/installer/kernel/, packaging/
 │
 ├── forbric-loader/                first generation; merge tools + artifact pipeline (§14)
-├── forbric-installer/             the first generation's installer
+├── legacy/forbric-installer/      the first generation's installer, not released
 └── fabric-loader/                 gitignored upstream checkout for forbric-loader
 ```
 
 ## 16. 构建与测试
 
-目前的开发入口是 `python3 tools/dev.py client`（Windows 上用 `py tools/dev.py client`）。它借用安装器的产物流水线，在 `forbric-kernel/.dev/` 下准备一套隔离的游戏输入，解析库/资源和锁定的编译 API，然后构建并启动当前的内核。需要 JDK 25+ 和 Python 3.9+。Gradle 提供 `prepareDev`、`runClient`、`runServer` 和 `devDoctor`；准备和启动必须分成两次 Gradle 调用，因为游戏侧的接线在任务运行之前就已配置完毕。命令和配置见[开发指南](forbric-kernel/run/README.md)。
+目前的开发入口是 `python3 tools/dev.py client`（Windows 上用 `py tools/dev.py client`）。它借用安装器的产物流水线，在 `forbric-kernel/.dev/` 下准备一套隔离的游戏输入，解析库/资源和锁定的编译 API，然后构建并启动当前的内核。需要 JDK 25+ 和 Python 3.9+。Gradle 提供 `prepareDev`、`runClient`、`runServer` 和 `devDoctor`；准备和启动必须分成两次 Gradle 调用，因为游戏侧的接线在任务运行之前就已配置完毕。命令和配置见[开发指南](../forbric-kernel/run/README.md)。
 
 `check` 还会运行开发/证据工具的自测，以及打包链接闸门的合成控制。`integrationTest` 要求暂存好的游戏和传输测试套件齐备，并且不允许任何测试被跳过；普通的 `test` 仍允许本地测试夹具缺失，并打印已执行/已跳过的数量。完整的集成测试套件除了基础游戏，还需要它指名的那些 mod 测试夹具；游戏准备好了，并不等于宣称每个兼容性包或真实实例闸门都已经跑过。
 
@@ -637,10 +638,10 @@ java -cp <boot-cp> net.forbric.kernel.boot.Main --scan --mods <dir> --report out
 
 ## 20. 延伸阅读
 
-- [`forbric-kernel/README.md`](forbric-kernel/README.zh-CN.md) —— 内核自己的概述和闸门说明
-- [`forbric-kernel/run/compat/PROTOCOL.md`](forbric-kernel/run/compat/PROTOCOL.md) —— 兼容性批量测试的流程
-- [`forbric-loader/README.md`](forbric-loader/README.zh-CN.md)、[`forbric-loader/run/README.md`](forbric-loader/run/README.md) —— 第一代，以及产物流水线
-- [`forbric-loader/CREDITS.md`](forbric-loader/CREDITS.md)、[`forbric-loader/MAPPINGS.md`](forbric-loader/MAPPINGS.md) —— 净室边界与在映射上的立场
+- [`forbric-kernel/README.md`](../forbric-kernel/README.zh-CN.md) —— 内核自己的概述和闸门说明
+- [`forbric-kernel/run/compat/PROTOCOL.md`](../forbric-kernel/run/compat/PROTOCOL.md) —— 兼容性批量测试的流程
+- [`forbric-loader/README.md`](../forbric-loader/README.zh-CN.md)、[`forbric-loader/run/README.md`](../forbric-loader/run/README.md) —— 第一代，以及产物流水线
+- [`forbric-loader/CREDITS.md`](../forbric-loader/CREDITS.md)、[`forbric-loader/MAPPINGS.md`](../forbric-loader/MAPPINGS.md) —— 净室边界与在映射上的立场
 - 类的 javadoc。`net.forbric.kernel` 下几乎每个类的开头都写着它是为了哪个故障而存在的。
 
 Forbric 与 Mojang、FabricMC、MinecraftForge、NeoForged 均无关联。
