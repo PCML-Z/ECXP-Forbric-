@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'net.forbric'
-version = '0.3.1-beta2'
+version = '0.10'
 
 java {
 	sourceCompatibility = JavaVersion.VERSION_17
@@ -268,7 +268,7 @@ if (project.hasProperty('releasePin')) {
 tasks.register('releaseAssets') {
 	description = 'Write build/release/: the jars to attach to a GitHub release + the manifest the installer downloads.'
 	dependsOn 'bundleForbric', 'buildMergeTools'
-	def repo = project.findProperty('releaseRepo') ?: 'https://github.com/Ray-T-r/Minecraft-Forbric-mod-loader'
+		def repo = project.findProperty('releaseRepo') ?: 'https://github.com/PCML-Z/ECXP-Forbric-'
 	def outRoot = layout.buildDirectory.dir('release')
 	outputs.dir(outRoot)
 	doLast {
@@ -358,7 +358,7 @@ jar {
 		// The window shows this back to the user. Without it Package.getImplementationVersion() is null on
 		// every build, and the field fell back to a literal that was right once and then was not: an installer
 		// built at 0.2.0 told the user it was 0.1.0.
-		attributes 'Implementation-Title': 'Forbric Installer'
+		attributes 'Implementation-Title': 'ECXP-Forbric+'
 		attributes 'Implementation-Version': project.version
 	}
 	// The kernel's own dependencies are resolved by the launcher from Maven; only Forbric's jars ride along.

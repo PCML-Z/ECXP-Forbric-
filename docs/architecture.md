@@ -23,12 +23,12 @@ ECXP-Forbric+ 是 Forbric 的增强分支，不是把内核推倒重写。整理
 
 ## 内核包，按职责
 
-`net.forbric.kernel` 下面文件很多，是因为每一处衔接都对应一个实测过的故障，不是因为目录没人管。不要为了「文件变短」去拆这些类：锚点、指纹和闸门是对着具体字节写的，拆开而不跑游戏夹具，只会让 mod 静默失效。
+`net.forbric.kernel` 下面文件很多，是因为每一处衔接都对应一个实测过的故障，不是因为目录没人管。锚点、指纹和闸门是对着具体字节写的。合并基底的修复已经按族拆到 `MergedBase*Repair`，调度顺序仍在 `ForbricMergedBaseCompatTransformer`。不要再拆 mixin，也不要改这个顺序：不跑游戏夹具就改字节，只会让 mod 静默失效。
 
 | 包 | 做什么 |
 | --- | --- |
 | `boot` | 启动顺序、mod 发现之后的生命周期、重复 mod 仲裁 |
-| `transform` | 合并基底上的字节码修复。最大的类在这里，因为每一条修复都要留在原处对照 |
+| `transform` | 合并基底上的字节码修复。`ForbricMergedBaseCompatTransformer` 保持顺序和声明，具体修复在 `MergedBase*Repair` |
 | `mixin` | 把写给原版或某一加载器的 mixin 挪到合并后的方法上，并对不上的记下来 |
 | `fabric` | Fabric Loader API 的实现。Fabric Loader 本身不运行 |
 | `interop` | Fabric、Forge、NeoForge 之间的物品、流体、能量和网络 |
@@ -52,4 +52,4 @@ ECXP-Forbric+ is an enhanced Forbric tree, not a rewrite. The layout separates t
 
 Current line: `forbric-kernel/` runs the game, `forbric-kernel-installer/` writes `versions/<mc>-ecxp-forbric`, and `tools/dev.py` prepares a developer machine. `forbric-loader/` remains for the first-generation substrate and merge tools. `legacy/forbric-installer/` is the old installer and is not what ships.
 
-Packages under `net.forbric.kernel` stay as they are. `transform` and `mixin` are large because each repair is checked against specific bytecode. Splitting those classes without the game-fixture suite would drop mods silently. The Java package name stays `net.forbric`; the profile suffix `-ecxp-forbric` is what keeps this install beside upstream Forbric.
+Packages under `net.forbric.kernel` stay as they are. The merged-base repairs now live in `MergedBase*Repair`; `ForbricMergedBaseCompatTransformer` still runs them in the order the anchor census pins. `mixin` stays in its measured classes. Splitting those without the game-fixture suite would drop mods silently. The Java package name stays `net.forbric`; the profile suffix `-ecxp-forbric` is what keeps this install beside upstream Forbric.

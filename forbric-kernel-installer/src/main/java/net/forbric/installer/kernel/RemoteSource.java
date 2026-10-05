@@ -57,7 +57,7 @@ final class RemoteSource {
 	/** The manifest's filename as a release asset. */
 	static final String MANIFEST_ASSET = "forbric-kernel-libraries.json";
 
-	private static final String DEFAULT_REPO = "https://github.com/Ray-T-r/Minecraft-Forbric-mod-loader";
+	private static final String DEFAULT_REPO = "https://github.com/PCML-Z/ECXP-Forbric-";
 	private static final String MAVEN_CENTRAL = "https://repo1.maven.org/maven2/";
 	private static final String MAVEN_FABRIC = "https://maven.fabricmc.net/";
 	private static final String FORBRIC_GROUP = "net.forbric:";

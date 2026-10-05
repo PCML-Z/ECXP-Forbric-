@@ -149,13 +149,21 @@ class AccessCensusTest {
 	 */
 	@Test
 	void everySatisfiedRowNamesAMemberSomeRepairStillHandles() throws Exception {
-		String transformer = java.nio.file.Files.readString(java.nio.file.Path.of(
-				"src/main/java/net/forbric/kernel/transform/ForbricMergedBaseCompatTransformer.java"));
+		StringBuilder transformer = new StringBuilder();
+		java.nio.file.Path dir = java.nio.file.Path.of("src/main/java/net/forbric/kernel/transform");
+		try (var list = java.nio.file.Files.list(dir)) {
+			for (java.nio.file.Path file : list.filter(p -> {
+				String n = p.getFileName().toString();
+				return n.equals("ForbricMergedBaseCompatTransformer.java") || n.startsWith("MergedBase");
+			}).sorted().toList()) {
+				transformer.append(java.nio.file.Files.readString(file)).append('\n');
+			}
+		}
 		List<String> orphaned = new java.util.ArrayList<>();
 		for (String directive : AccessCensus.allSatisfiedElsewhere().keySet()) {
 			String[] parts = directive.split(" ");
 			// "field <owner> <name> <desc>" — the member name is what a repair has to still be about.
-			if (parts.length < 4 || !transformer.contains(parts[2])) orphaned.add(directive);
+			if (parts.length < 4 || !transformer.toString().contains(parts[2])) orphaned.add(directive);
 		}
 		assertTrue(orphaned.isEmpty(), "these rows suppress an access-widener report on the strength of a repair "
 				+ "that no longer mentions the member: " + orphaned);
