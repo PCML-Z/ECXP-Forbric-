@@ -121,7 +121,8 @@ public final class MergedBaseLinkGateTest {
 		} catch (IOException expected) {
 			requireDoNotFit(expected, supplied, "game/Target.value");
 		}
-		require(!Files.exists(mcDir.resolve("versions/26.2-forbric/26.2-forbric.json")), "a profile was written");
+		require(!Files.exists(mcDir.resolve("versions/26.2" + Installer.PROFILE_SUFFIX + "/26.2" + Installer.PROFILE_SUFFIX + ".json")),
+				"a profile was written");
 
 		// A damaged copy of a runtime is still the right kind of file (the content check reads only what it needs),
 		// and the link checker dies reading it. The way out first, then the checker's own words.

@@ -128,7 +128,7 @@ public final class Main {
 					+ " release; drop --offline, or use an installer built with its payload");
 			System.exit(2);
 		}
-		System.out.println("Forbric installer");
+		System.out.println("ECXP-Forbric+");
 		System.out.println("  minecraft dir : " + dir);
 		System.out.println("  game version  : " + mcVersion);
 		System.out.println("  Forbric jars  : " + describeSource(remote, forceRemote));
