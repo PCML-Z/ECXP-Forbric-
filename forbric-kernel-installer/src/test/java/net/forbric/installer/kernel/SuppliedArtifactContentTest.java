@@ -37,7 +37,7 @@ public final class SuppliedArtifactContentTest {
 		// ---- the real shapes pass ----
 		Path merged = jar(work.resolve("ok/patched-mc-merged-26.2.jar"), mergedBase(MC, true, true));
 		Path forge = jar(work.resolve("ok/forge-runtime-interop.jar"), forgeRuntime("65.0.1", true));
-		Path neo = jar(work.resolve("ok/neoforge-runtime.jar"), neoRuntime(Pins.NEOFORGE));
+		Path neo = jar(work.resolve("ok/neoforge-runtime.jar"), neoRuntime(Pins.neoforge()));
 		requireOk(MERGED, merged);
 		requireOk(FORGE, forge);
 		requireOk(NEO, neo);
@@ -97,10 +97,10 @@ public final class SuppliedArtifactContentTest {
 
 		// ---- the right runtime, built for another version: 0.2.0's NeoForge runtime passed all of the above ----
 		requireProblem(NEO, jar(work.resolve("neoforge-runtime-0.2.0.jar"), neoRuntime("26.2.0.38-beta")),
-				"It was built for NeoForge 26.2.0.38-beta; this installer needs " + Pins.NEOFORGE + ".");
+				"It was built for NeoForge 26.2.0.38-beta; this installer needs " + Pins.neoforge() + ".");
 		requireProblem(FORGE, jar(work.resolve("forge-runtime-65.0.0.jar"), forgeRuntime("65.0.0", true)),
 				"It was built for MinecraftForge 65.0.0; this installer needs 65.0.1.");
-		Map<String, byte[]> unversioned = neoRuntime(Pins.NEOFORGE);
+		Map<String, byte[]> unversioned = neoRuntime(Pins.neoforge());
 		unversioned.remove("META-INF/MANIFEST.MF");
 		requireProblem(NEO, jar(work.resolve("neoforge-runtime-no-manifest.jar"), unversioned),
 				"does not say which NeoForge it was built for");
@@ -126,7 +126,7 @@ public final class SuppliedArtifactContentTest {
 		callsOnly.put(INTEROP_CLASS, classFile(INTEROP_CLASS, List.of("contents", "()Ljava/util/Map;"), "<init>", "()V"));
 		requireProblem(FORGE, jar(work.resolve("forge-runtime-calls-contents.jar"), callsOnly), "It is forge-runtime.jar");
 		// NeoForge's runtime has no such bridge and needs none.
-		requireOk(NEO, jar(work.resolve("neo-without-bridge/neoforge-runtime.jar"), neoRuntime(Pins.NEOFORGE)));
+		requireOk(NEO, jar(work.resolve("neo-without-bridge/neoforge-runtime.jar"), neoRuntime(Pins.neoforge())));
 		checks += 4;
 
 		// ---- a jar that opens but whose entry does not read back is damaged, not "not a jar" ----
@@ -211,7 +211,7 @@ public final class SuppliedArtifactContentTest {
 		// A bad --jdk AND a wrong set: both reasons, not just the first.
 		Path noJdk = work.resolve("no-such-jdk");
 		List<String> out = new ArrayList<>();
-		Doctor.Report report = new Doctor(out::add).examine(mcDir, noJdk, wrong);
+		Doctor.Report report = new Doctor(out::add).examine(mcDir, noJdk, wrong, Pins.DEFAULT_MINECRAFT);
 		String text = String.join("\n", out);
 		require(!report.ok(), "--doctor passed a wrong set with no JDK:\n" + text);
 		require(text.contains("not the game files Forbric needs"), "the artifact refusal is missing:\n" + text);
@@ -224,7 +224,7 @@ public final class SuppliedArtifactContentTest {
 		Files.copy(merged, half.resolve("patched-mc-merged-26.2.jar"));
 		Files.copy(forge, half.resolve("neoforge-runtime.jar")); // the usual mistake: the runtimes swapped
 		out.clear();
-		report = new Doctor(out::add).examine(mcDir, null, half);
+		report = new Doctor(out::add).examine(mcDir, null, half, Pins.DEFAULT_MINECRAFT);
 		text = String.join("\n", out);
 		require(!report.ok(), "--doctor passed a half-filled directory:\n" + text);
 		for (String line : List.of("    present  net.forbric:patched-mc-merged",
@@ -243,7 +243,7 @@ public final class SuppliedArtifactContentTest {
 		Files.copy(forge, half.resolve("forge-runtime-interop.jar"));
 		Files.copy(neo, half.resolve("neoforge-runtime.jar"), StandardCopyOption.REPLACE_EXISTING);
 		out.clear();
-		report = new Doctor(out::add).examine(mcDir, null, half);
+		report = new Doctor(out::add).examine(mcDir, null, half, Pins.DEFAULT_MINECRAFT);
 		text = String.join("\n", out);
 		require(report.ok() && out.contains("RESULT: ready to install, with no build needed."),
 				"--doctor refused a complete, correct set:\n" + text);

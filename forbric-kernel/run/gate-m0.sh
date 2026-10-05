@@ -35,7 +35,7 @@ step "0. the base the unit tests read is the base this run checks"
 # different jars, and this gate would pass the unit tests on one base and the link check on another while the
 # evidence recorded only the second. Same bytes, or no verdict. (FORGE_RT is the interop jar, derived from the raw
 # runtime the tests read, so it has no staged twin to compare.)
-for pair in "MERGED:$RUN_OLD/merged-base/patched-mc-merged-26.2.jar" "NEO_RT:$RUN_OLD/neoforge-runtime/neoforge-runtime.jar"; do
+for pair in "MERGED:$RUN_OLD/merged-base/patched-mc-merged-$MC_VER.jar" "NEO_RT:$RUN_OLD/neoforge-runtime/neoforge-runtime.jar"; do
   var="${pair%%:*}"; staged="${pair#*:}"; requested="${!var:-}"
   [ -n "$requested" ] || { echo "[kernel] PASS $var unset: the tests and the link check both read $staged"; continue; }
   if [ -f "$requested" ] && [ -f "$staged" ] && cmp -s "$requested" "$staged"; then
@@ -140,7 +140,7 @@ step "4. the merged base links (against the committed baseline)"
 LINK_BASELINE="${LINK_BASELINE:-$KERNEL/../forbric-loader/src/test/resources/merge/link-check-baseline.txt}"
 LINKLOG="$BUILD/gate-m0-linkcheck.log"
 if LINK_BASELINE="$LINK_BASELINE" bash "$KERNEL/../forbric-loader/run/check-merged-links.sh" \
-    "${MERGED:-$RUN_OLD/merged-base/patched-mc-merged-26.2.jar}" \
+    "${MERGED:-$RUN_OLD/merged-base/patched-mc-merged-$MC_VER.jar}" \
     "${NEO_RT:-$RUN_OLD/neoforge-runtime/neoforge-runtime.jar}" \
     "${FORGE_RT:-$RUN_OLD/merged-base/forge-runtime-interop.jar}" > "$LINKLOG" 2>&1; then
   check "the merged base links no worse than the baseline" "dangling references: [0-9]+ \(known [0-9]+, new 0\)" "$LINKLOG"

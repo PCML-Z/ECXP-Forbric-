@@ -240,6 +240,7 @@ final class GameArtifacts {
 		} catch (IOException unreadable) {
 			return "It cannot be read: " + unreadable.getMessage();
 		}
+		Pins.PinSet pins = Pins.forVersion(mcVersion);
 		try (ZipFile zip = opened) {
 			if (zip.size() == 0) return "It is an empty archive, with no files in it.";
 			String installer = installerName(zip);
@@ -248,11 +249,11 @@ final class GameArtifacts {
 				case ArtifactBuilder.MERGED -> mergedBaseProblem(zip, mcVersion);
 				case ArtifactBuilder.FORGE_RUNTIME -> {
 					String problem = runtimeProblem(zip, "MinecraftForge", FORGE_CORE, FORGE_LOADER,
-							new ForgeArtifacts(mcVersion, Pins.FORGE).fmlVersion);
+							new ForgeArtifacts(mcVersion, pins.forge()).fmlVersion);
 					yield problem != null ? problem : interopProblem(zip);
 				}
 				case ArtifactBuilder.NEOFORGE_RUNTIME -> runtimeProblem(zip, "NeoForge", NEO_CORE, NEO_LOADER,
-						Pins.NEOFORGE);
+						pins.neoforge());
 				default -> throw new IllegalArgumentException("not a game artifact: " + coordinate);
 			};
 		} catch (IOException damaged) {

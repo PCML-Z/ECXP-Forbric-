@@ -4,6 +4,15 @@ set -uo pipefail
 
 KERNEL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# The Minecraft generation every gate below runs against. 26.2 is the default and the one the gate suite was
+# calibrated on; export MC_VER=1.21.8 (or 1.21.1) to point the WHOLE suite at another generation — the launch
+# scripts, the staged merged base name and the installer profile name all read this one variable.
+#
+# It is a pin, not a knob: a generation other than 26.2 still needs its own anchor tables and transfer shape
+# audit re-measured before a gate can say anything true about it. See the multi-version plan.
+MC_VER="${MC_VER:-26.2}"
+export MC_VER
+
 # Where the staged game artifacts, the downloaded mod packs and the built canaries live. Fourteen gates read
 # from it, and NONE of it is in git -- it is all build output and downloads, so a fresh checkout has none of it.
 #

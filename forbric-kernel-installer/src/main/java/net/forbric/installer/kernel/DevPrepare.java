@@ -11,34 +11,42 @@ import java.util.Map;
 public final class DevPrepare {
 
 	public static void main(String[] args) throws Exception {
-		if (args.length != 3) throw new IllegalArgumentException("usage: DevPrepare <mc-dir> <staged-run-dir> <java>");
+		if (args.length != 3 && args.length != 4) {
+			throw new IllegalArgumentException("usage: DevPrepare <mc-dir> <staged-run-dir> <java> [minecraft-version]");
+		}
 		Path mc = Path.of(args[0]).toAbsolutePath();
 		Path stage = Path.of(args[1]).toAbsolutePath();
 		JdkLocator.Jvm jvm = JdkLocator.locate(mc, Path.of(args[2]), System.out::println);
 		if (jvm.feature() < 25) throw new IOException("Minecraft 26.2 development needs JDK 25 or newer");
-		Path version = mc.resolve("versions").resolve(Pins.MINECRAFT);
-		if (!Files.isRegularFile(version.resolve(Pins.MINECRAFT + ".jar"))
-				|| !Files.isRegularFile(version.resolve(Pins.MINECRAFT + ".json"))) {
-			new MojangDownloader(System.out::println).downloadClient(Pins.MINECRAFT, version);
+		String mcVersion = args.length == 4 ? args[3] : Pins.DEFAULT_MINECRAFT;
+		if (!Pins.isSupported(mcVersion)) {
+			throw new IOException("no pins for Minecraft " + mcVersion + "; this installer supports "
+					+ String.join(", ", Pins.supportedMinecraftVersions()));
 		}
-		Map<String, Path> artifacts = new ArtifactBuilder(System.out::println).build(mc, Pins.MINECRAFT, jvm);
-		copy(artifacts.get(ArtifactBuilder.MERGED), stage.resolve("merged-base/patched-mc-merged-26.2.jar"));
+		Path version = mc.resolve("versions").resolve(mcVersion);
+		if (!Files.isRegularFile(version.resolve(mcVersion + ".jar"))
+				|| !Files.isRegularFile(version.resolve(mcVersion + ".json"))) {
+			new MojangDownloader(System.out::println).downloadClient(mcVersion, version);
+		}
+		Map<String, Path> artifacts = new ArtifactBuilder(System.out::println).build(mc, mcVersion, jvm);
+		copy(artifacts.get(ArtifactBuilder.MERGED),
+				stage.resolve("merged-base/patched-mc-merged-" + mcVersion + ".jar"));
 		copy(artifacts.get(ArtifactBuilder.FORGE_RUNTIME), stage.resolve("merged-base/forge-runtime-interop.jar"));
 		copy(artifacts.get(ArtifactBuilder.NEOFORGE_RUNTIME), stage.resolve("neoforge-runtime/neoforge-runtime.jar"));
 		// Compilation and bytecode tests read the raw carrier, while launch uses the interop-patched carrier.
 		copy(mc.resolve(".forbric-build/out/forge-runtime.jar"), stage.resolve("forge-runtime/forge-runtime.jar"));
 		// Both patched sides too: the bytecode tests compare the merged base against each of them.
-		copy(mc.resolve(".forbric-build/out/patched-mc-forge-26.2.jar"),
-				stage.resolve("forge-patched/patched-mc-forge-26.2.jar"));
-		copy(mc.resolve(".forbric-build/out/patched-mc-neoforge-26.2.jar"),
-				stage.resolve("neoforge-patched/patched-mc-neoforge-26.2.jar"));
+		copy(mc.resolve(".forbric-build/out/patched-mc-forge-" + mcVersion + ".jar"),
+				stage.resolve("forge-patched/patched-mc-forge-" + mcVersion + ".jar"));
+		copy(mc.resolve(".forbric-build/out/patched-mc-neoforge-" + mcVersion + ".jar"),
+				stage.resolve("neoforge-patched/patched-mc-neoforge-" + mcVersion + ".jar"));
 		// The build pins beside the merged base and the Forge side say both came out of this one merge. A staged
 		// tree without them (forbric-loader's, whose forge-patched/ is an older build than the one its merge read)
 		// sends the tests to the Forge jar a launcher install keeps under libraries/ instead.
-		copy(mc.resolve(".forbric-build/out/patched-mc-merged-26.2.jar.pins"),
-				stage.resolve("merged-base/patched-mc-merged-26.2.jar.pins"));
-		copy(mc.resolve(".forbric-build/out/patched-mc-forge-26.2.jar.pins"),
-				stage.resolve("forge-patched/patched-mc-forge-26.2.jar.pins"));
+		copy(mc.resolve(".forbric-build/out/patched-mc-merged-" + mcVersion + ".jar.pins"),
+				stage.resolve("merged-base/patched-mc-merged-" + mcVersion + ".jar.pins"));
+		copy(mc.resolve(".forbric-build/out/patched-mc-forge-" + mcVersion + ".jar.pins"),
+				stage.resolve("forge-patched/patched-mc-forge-" + mcVersion + ".jar.pins"));
 		// The merge's own report of what it could not reconcile; the tests check the kernel accounts for each loss.
 		copy(mc.resolve(".forbric-build/out/merge-conflicts.txt"), stage.resolve("merged-base/merge-conflicts.txt"));
 		System.out.println("Development artifacts staged under " + stage);

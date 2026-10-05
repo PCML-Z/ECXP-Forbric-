@@ -16,81 +16,193 @@
 
 package net.forbric.installer.kernel;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
 /**
- * The upstream versions this installer builds against.
+ * The upstream versions each supported Minecraft generation builds against, keyed by that generation's Minecraft
+ * version.
  *
  * <p>They are pins, not defaults: each one was chosen because a specific thing breaks at the neighbouring
  * versions, and the reason lives next to the number so nobody "updates" it back into the failure. Everything the
  * install produces is keyed on this set, so bumping any of them invalidates the cached artifacts that depend on
- * it.
+ * it — {@link BuildStamp} folds the whole set into one string per version, so two generations can never share a
+ * cache entry.
+ *
+ * <p><b>Generations, not a range.</b> Forbric is NOT version-agnostic: a generation is one Minecraft version whose
+ * namespace strategy, Forge/NeoForge toolchain and bytecode anchors are all measured against that exact build.
+ * Two generations cannot be served by the same merged base, so they are modelled here as independent entries
+ * rather than as a lower/upper bound. The namespace split is the sharp edge:
+ *
+ * <ul>
+ *   <li><b>26.2</b> is Mojmap-native — the vanilla jar is already deobfuscated — so the canonical runtime
+ *       namespace is <em>identity</em> ({@code -Dforbric.runtimeNamespace=named}): no intermediary, no remap.</li>
+ *   <li><b>1.21.1 / 1.21.8</b> are obfuscated, so the canonical runtime namespace is <em>intermediary</em> and a
+ *       Forge mod's Mojmap bytecode is remapped into it (the strategy 1.21.11 proved). They also predate the
+ *       NeoFormRuntime pipeline: their Forge half is patched with MCPConfig/BinaryPatcher, and 1.21.1 has no
+ *       NeoForge at all (NeoForge split from Forge at 1.20.5), so that generation builds a two-carrier merged
+ *       base rather than a three-carrier one.</li>
+ * </ul>
+ *
+ * <p>Adding a generation therefore means adding an entry here AND regenerating that version's anchor tables
+ * (see {@code docs/ multi-version plan}); the pin is the declaration, the anchors are the reality.
  */
 final class Pins {
 
 	private Pins() {
 	}
 
-	/** The only Minecraft version this generation supports. */
-	static final String MINECRAFT = "26.2";
+	/** One Minecraft generation's pins. Immutable; {@link #stamp()} is its cache key contribution. */
+	record PinSet(String minecraft, String forge, String neoforge, String nfrt, String nfrtResult) {
 
-	/** MinecraftForge, in its own {@code <mc>-<fml>} coordinate form. */
-	static final String FORGE = "26.2-65.0.1";
+		/**
+		 * The NeoForge artifact NeoFormRuntime is pointed at. The bare coordinate does not exist on the Maven.
+		 * Empty {@code neoforge} (a generation with no NeoForge, e.g. 1.21.1) means there is no such coordinate.
+		 */
+		String neoforgeUserdevCoordinate() {
+			return neoforge.isEmpty() ? "" : "net.neoforged:neoforge:" + neoforge + ":userdev";
+		}
 
-	/**
-	 * NeoForge, on the first release line rather than a beta.
-	 *
-	 * <p>This used to be {@code 26.2.0.38-beta}, because {@code .40-beta} deletes {@code ContainerScreenEvent}
-	 * and {@code .43-beta} deletes {@code PlayerInteractEvent$EntityInteractSpecific}, and the reference pack's
-	 * jei / sophisticatedcore / sophisticatedbackpacks still called them. Two things ended that:
-	 * {@code .57} and up are releases rather than betas, and the title screen brands whatever build it is running,
-	 * so a beta carrier tells every player it is a beta; and JEI now declares {@code neoforge [26.2.0.67,)}, which
-	 * {@code .38-beta} does not satisfy — staying put had become the thing that froze the pack.
-	 *
-	 * <p>Re-measured at the bump: {@code .38-beta → .88} removes 12 classes and adds 24; of the 98 jars in the
-	 * reference pack exactly two named anything removed, and the current builds of those mods name none of it.
-	 * Every {@code neoforge} versionRange declared in the pack is satisfied. The one thing only the class diff
-	 * caught is that {@code client.gui.ModListScreen} moved to {@code client.gui.modlist} — which the kernel's
-	 * mods-button redirect names, and which would have failed silently. {@code ForeignTypeCarrierTest} now checks
-	 * every such name against the carrier.
-	 */
-	static final String NEOFORGE = "26.2.0.88";
+		/** NeoFormRuntime's own fat jar. Empty for a generation that does not use NFRT. */
+		String nfrtCoordinate() {
+			return nfrt.isEmpty() ? "" : "net.neoforged:neoform-runtime:" + nfrt + ":all";
+		}
 
-	/**
-	 * NeoFormRuntime, pinned to the build actually validated rather than the newest published one.
-	 *
-	 * <p>NFRT's own jar digest is part of its cache key, so a different NFRT is entitled to produce different
-	 * bytes. 2.0.18 is the build whose {@code gameJar} result was checked byte-for-byte against the reference
-	 * {@code patched-mc-neoforge-26.2.jar} (sha1 {@code 5b2970209ee12702117309576b08521aa38ae67b}).
-	 */
-	static final String NFRT = "2.0.18";
+		/** Whether this generation has a NeoForge carrier at all. */
+		boolean hasNeoForge() {
+			return !neoforge.isEmpty();
+		}
 
-	/**
-	 * The NeoForm result Forbric takes out of NFRT.
-	 *
-	 * <p>{@code gameJarNoRecomp} is the binary-patch path — {@code preProcessJar → binaryPatch →
-	 * copyUnpatchedClasses → applyDevTransforms} — and it produces the same 10,963 classes as the {@code gameJar}
-	 * recompile path in about six seconds, with no decompiler, no 4 GB heap and no {@code javac}. Merging from it
-	 * yields a conflict report that is identical to the recompile path's <em>as a set</em> and a merged base with
-	 * the same 30,471 entries.
-	 *
-	 * <p>It must not be {@code gameJarNoRecompWithNeoForge}: that variant routes through
-	 * {@code binaryWithNeoForge} and folds NeoForge's own classes into the jar, which would then define them
-	 * twice — once inside the merged base, once in {@code neoforge-runtime.jar}.
-	 */
-	static final String NFRT_RESULT = "gameJarNoRecomp";
-
-	/** The NeoForge artifact NFRT is pointed at. The bare coordinate does not exist on the Maven. */
-	static String neoforgeUserdevCoordinate() {
-		return "net.neoforged:neoforge:" + NEOFORGE + ":userdev";
+		/** A one-line summary for the build stamp, so a cached artifact records what produced it. */
+		String stamp() {
+			return "mc=" + minecraft + " forge=" + forge + " neoforge=" + neoforge
+					+ " nfrt=" + nfrt + " result=" + nfrtResult;
+		}
 	}
 
-	/** NeoFormRuntime's own fat jar. */
-	static String nfrtCoordinate() {
-		return "net.neoforged:neoform-runtime:" + NFRT + ":all";
+	/**
+	 * The default generation, and the one the CLI falls back to when no {@code --mc} is given. 26.2 is the
+	 * Mojmap-native generation every gate currently runs against.
+	 */
+	static final String DEFAULT_MINECRAFT = "26.2";
+
+	// ---- 26.2 (Mojmap-native, identity namespace, three carriers) ------------------------------------------------
+
+	/**
+	 * Minecraft 26.2: the current default.
+	 *
+	 * <p>Mojmap-native, so the canonical runtime namespace is identity and the merged base is NeoForge's game
+	 * with MinecraftForge's patches merged in (three carriers: merged base + forge-runtime + neoforge-runtime).
+	 */
+	private static final PinSet V26_2 = new PinSet(
+			"26.2",
+			// MinecraftForge, in its own <mc>-<fml> coordinate form.
+			"26.2-65.0.1",
+			// NeoForge, on the first release line rather than a beta. Re-measured at the bump: .38-beta → .88
+			// removes 12 classes and adds 24; of the 98 jars in the reference pack exactly two named anything
+			// removed. .57 and up are releases, and a beta carrier tells every player it is a beta.
+			"26.2.0.88",
+			// NeoFormRuntime, pinned to the build whose gameJar result was checked byte-for-byte against the
+			// reference (sha1 5b2970209ee12702117309576b08521aa38ae67b).
+			"2.0.18",
+			// gameJarNoRecomp is the binary-patch path: same 10,963 classes as the recompile path in ~6s, with
+			// no decompiler / 4 GB heap / javac, and an identical conflict report as a set.
+			"gameJarNoRecomp");
+
+	// ---- 1.21.8 (obfuscated, intermediary namespace, three carriers) ---------------------------------------------
+
+	/**
+	 * Minecraft 1.21.8: obfuscated, so the canonical runtime namespace is intermediary (the 1.21.11 strategy).
+	 *
+	 * <p>NeoForge exists here (21.8.54 is the release line) and still ships the NeoForm userdev config, so the
+	 * three-carrier merged base applies — but every anchor table and the transfer shape audit have to be
+	 * re-measured against this exact build before any of it can be claimed as working.
+	 */
+	private static final PinSet V1_21_8 = new PinSet(
+			"1.21.8",
+			// MinecraftForge, <mc>-<fml> form. Pinned to the 1.21.8 Forge line; the reason it is this build
+			// belongs in the multi-version plan once the Forge half is actually measured.
+			"1.21.8-54.1.32",
+			"21.8.54",
+			// 1.21.8 predates the NFRT pipeline the 26.2 half uses; its Forge side is patched with
+			// MCPConfig/BinaryPatcher. Left empty until that path is wired, so nothing silently claims NFRT.
+			"",
+			"");
+
+	// ---- 1.21.1 (obfuscated, intermediary namespace, TWO carriers — no NeoForge) -------------------------------
+
+	/**
+	 * Minecraft 1.21.1: obfuscated, intermediary namespace, and <b>two carriers only</b>.
+	 *
+	 * <p>NeoForge split from Forge at 1.20.5, so there is no NeoForge for 1.21.1 in the NeoForge line that
+	 * Forbric targets — this generation builds a two-carrier merged base (merged base + forge-runtime) and the
+	 * merge tool must degrade accordingly. The neoforge pin is deliberately empty so every consumer that needs it
+	 * fails loudly rather than building a 26.2-shaped carrier for the wrong Minecraft.
+	 */
+	private static final PinSet V1_21_1 = new PinSet(
+			"1.21.1",
+			// MinecraftForge, <mc>-<fml> form for the 1.21.1 line.
+			"1.21.1-52.0.40",
+			// No NeoForge for 1.21.1. See the javadoc.
+			"",
+			// Pre-NFRT generation; MCPConfig/BinaryPatcher, not NeoFormRuntime.
+			"",
+			"");
+
+	/** Every supported generation, in insertion order. The map key is the Minecraft version. */
+	private static final Map<String, PinSet> BY_MINECRAFT = new LinkedHashMap<>();
+
+	static {
+		BY_MINECRAFT.put(V26_2.minecraft(), V26_2);
+		BY_MINECRAFT.put(V1_21_8.minecraft(), V1_21_8);
+		BY_MINECRAFT.put(V1_21_1.minecraft(), V1_21_1);
 	}
 
-	/** A one-line summary for the build stamp, so a cached artifact records what produced it. */
+	/** The Minecraft versions this installer can build, in the order the CLI lists them. */
+	static Set<String> supportedMinecraftVersions() {
+		return BY_MINECRAFT.keySet();
+	}
+
+	/** Whether {@code minecraft} has a pin set here. */
+	static boolean isSupported(String minecraft) {
+		return BY_MINECRAFT.containsKey(minecraft);
+	}
+
+	/**
+	 * The pins for {@code minecraft}.
+	 *
+	 * @throws IllegalArgumentException if the version has no pin set — the installer must never silently fall back
+	 *                                  to 26.2, because that builds a carrier for the wrong Minecraft.
+	 */
+	static PinSet forVersion(String minecraft) {
+		PinSet pins = BY_MINECRAFT.get(minecraft);
+		if (pins == null) {
+			throw new IllegalArgumentException("no pins for Minecraft " + minecraft
+					+ "; this installer supports " + String.join(", ", BY_MINECRAFT.keySet()));
+		}
+		return pins;
+	}
+
+	// ---- Default-generation shortcuts (the CLI's --mc default) ---------------------------------------------------
+
+	/** The default generation's Minecraft version (26.2). */
+	static String minecraft() {
+		return DEFAULT_MINECRAFT;
+	}
+
+	/** The default generation's MinecraftForge pin. */
+	static String forge() {
+		return V26_2.forge();
+	}
+
+	/** The default generation's NeoForge pin. */
+	static String neoforge() {
+		return V26_2.neoforge();
+	}
+
+	/** A one-line summary of the default generation, for the build stamp. */
 	static String stamp() {
-		return "mc=" + MINECRAFT + " forge=" + FORGE + " neoforge=" + NEOFORGE
-				+ " nfrt=" + NFRT + " result=" + NFRT_RESULT;
+		return V26_2.stamp();
 	}
 }

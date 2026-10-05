@@ -80,8 +80,8 @@ final class MergedBaseTool {
 	 */
 	ArtifactResult merge(JdkLocator.Jvm jvm, Path vanilla, Path forgePatched, Path neoPatched,
 	                     Path forgeRuntime, Path neoforgeRuntime, Path outJar, Path report,
-	                     String coordinate) throws IOException {
-		if (BuildStamp.isFresh(outJar)) {
+	                     String coordinate, String mcVersion) throws IOException {
+		if (BuildStamp.isFresh(outJar, mcVersion)) {
 			log.accept("[merge] up-to-date: " + outJar.getFileName());
 			return new ArtifactResult(coordinate, outJar, Util.sha1(outJar), Files.size(outJar));
 		}
@@ -101,7 +101,7 @@ final class MergedBaseTool {
 		}
 		long size = Files.size(outJar);
 		log.accept("[merge] wrote " + outJar.getFileName() + " (" + (size / (1024 * 1024)) + " MB)");
-		BuildStamp.write(outJar);
+		BuildStamp.write(outJar, mcVersion);
 		return new ArtifactResult(coordinate, outJar, Util.sha1(outJar), size);
 	}
 
@@ -109,9 +109,9 @@ final class MergedBaseTool {
 	 * Patches {@code forge-runtime.jar}'s own classes so they still satisfy the interfaces the merged base
 	 * widened on NeoForge's behalf. The result is what gets staged; the input is left alone.
 	 */
-	ArtifactResult interop(JdkLocator.Jvm jvm, Path forgeRuntime, Path outJar, String coordinate)
-			throws IOException {
-		if (BuildStamp.isFresh(outJar)) {
+	ArtifactResult interop(JdkLocator.Jvm jvm, Path forgeRuntime, Path outJar, String coordinate,
+			String mcVersion) throws IOException {
+		if (BuildStamp.isFresh(outJar, mcVersion)) {
 			log.accept("[interop] up-to-date: " + outJar.getFileName());
 			return new ArtifactResult(coordinate, outJar, Util.sha1(outJar), Files.size(outJar));
 		}
@@ -126,7 +126,7 @@ final class MergedBaseTool {
 		if (!Files.isRegularFile(outJar) || Files.size(outJar) == 0) {
 			throw new IOException("the interop patch did not produce " + outJar);
 		}
-		BuildStamp.write(outJar);
+		BuildStamp.write(outJar, mcVersion);
 		return new ArtifactResult(coordinate, outJar, Util.sha1(outJar), Files.size(outJar));
 	}
 

@@ -38,7 +38,7 @@ GENERATE_SECONDS="${M31_GENERATE_SECONDS:-150}"
 mkdir -p "$BUILD"
 
 MC="${MC_DIR:-$HOME/Library/Application Support/minecraft}"
-if [ ! -f "${VANILLA_JAR:-$MC/versions/26.2/26.2.jar}" ]; then
+if [ ! -f "${VANILLA_JAR:-$MC/versions/$MC_VER/$MC_VER.jar}" ]; then
   echo "[kernel] FATAL: no vanilla 26.2 jar under $MC — this gate's control arm IS vanilla; there is nothing to"
   echo "[kernel]        compare against without it. Set VANILLA_JAR or MC_DIR."
   exit 3

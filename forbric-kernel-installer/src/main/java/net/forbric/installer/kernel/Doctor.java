@@ -67,7 +67,7 @@ final class Doctor {
 	 * @param explicitJdk a {@code --jdk} override, or null
 	 * @param artifactDir where prebuilt game artifacts may already be, or null
 	 */
-	Report examine(Path mcDir, Path explicitJdk, Path artifactDir) {
+	Report examine(Path mcDir, Path explicitJdk, Path artifactDir, String mcVersion) {
 		log.accept("Forbric installer — toolchain check");
 		log.accept("");
 
@@ -77,13 +77,13 @@ final class Doctor {
 		boolean mcDirExists = Files.isDirectory(mcDir);
 		log.accept("minecraft dir : " + mcDir + (mcDirExists ? "" : "   [not found]"));
 
-		Path baseJson = mcDir.resolve("versions").resolve(Pins.MINECRAFT).resolve(Pins.MINECRAFT + ".json");
+		Path baseJson = mcDir.resolve("versions").resolve(mcVersion).resolve(mcVersion + ".json");
 		boolean baseInstalled = Files.isRegularFile(baseJson);
-		log.accept("base " + Pins.MINECRAFT + "     : "
+		log.accept("base " + mcVersion + "     : "
 				+ (baseInstalled ? "installed" : "not installed — the installer will fetch it from Mojang"));
 
 		log.accept("");
-		log.accept("pins          : " + Pins.stamp());
+		log.accept("pins          : " + Pins.forVersion(mcVersion).stamp());
 
 		// Report every launcher runtime found, not just the JVM chosen: on most machines the installer's own JVM
 		// is new enough and wins outright, so this is the only place the launcher-only path gets exercised.
@@ -119,9 +119,9 @@ final class Doctor {
 		Map<String, String> wrong = Map.of();
 		String artifactProblem = null;
 		if (artifactDir != null) {
-			GameArtifacts supplied = GameArtifacts.find(Pins.MINECRAFT, artifactDir);
+			GameArtifacts supplied = GameArtifacts.find(mcVersion, artifactDir);
 			located = supplied.all();
-			wrong = supplied.contentProblems(Pins.MINECRAFT);
+			wrong = supplied.contentProblems(mcVersion);
 			if (!wrong.isEmpty() || !supplied.missing().isEmpty()) {
 				artifactProblem = supplied.refusal(wrong).getMessage();
 			}

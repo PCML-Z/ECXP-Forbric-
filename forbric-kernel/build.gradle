@@ -9,6 +9,19 @@ base {
 
 version = '0.1.0-SNAPSHOT'
 
+// The Minecraft generation this tree is built against. 26.2 (Mojmap-native, identity namespace) is the default
+// and the one every gate currently runs. Override with -Pforbric.mcVersion=1.21.8 (or 1.21.1) to build the game
+// side against that generation's staged artifacts and version JSON.
+//
+// This only re-points where the build READS its compile-time inputs from (the merged base, the Fabric API build,
+// the staged version JSON). It does NOT by itself make the tree boot on that version: the game's Mojmap anchor
+// tables and the transfer shape audit are measured against 26.2 and must be re-measured per generation before the
+// result is more than a successful compile. See the multi-version plan.
+def mcVersion = project.findProperty('forbric.mcVersion') ?: '26.2'
+// The Fabric API build that matches the generation. Overridable on its own (-Pforbric.fabricApi=<jar>) because a
+// dev pack may already carry the right one; the default is the one this generation was calibrated against.
+def fabricApiVersion = project.findProperty('forbric.fabricApiVersion') ?: '0.155.2+' + mcVersion
+
 java {
 	// The sovereign kernel raises the floor to Java 21 (records, pattern switch, sealed types). The game itself
 	// needs Java 25, but the boot-side kernel bytecode only needs 21; we pin release 21 so the build runs on any
@@ -31,8 +44,8 @@ java {
 def devStage = file('.dev/staged/run')
 def stagedRoot         = file(project.findProperty('forbric.stagedRoot')
 		?: (System.getenv('FORBRIC_OLD') ? System.getenv('FORBRIC_OLD') + '/run'
-				: (new File(devStage, 'merged-base/patched-mc-merged-26.2.jar').isFile() ? devStage : '../forbric-loader/run')))
-def stagedMergedBase   = new File(stagedRoot, 'merged-base/patched-mc-merged-26.2.jar')
+				: (new File(devStage, "merged-base/patched-mc-merged-${mcVersion}.jar").isFile() ? devStage : '../forbric-loader/run')))
+def stagedMergedBase   = new File(stagedRoot, "merged-base/patched-mc-merged-${mcVersion}.jar")
 def stagedForgeRuntime = new File(stagedRoot, 'forge-runtime/forge-runtime.jar')
 def stagedNeoRuntime   = new File(stagedRoot, 'neoforge-runtime/neoforge-runtime.jar')
 def stagedGameJars = [stagedMergedBase, stagedForgeRuntime, stagedNeoRuntime].findAll { it.isFile() }
@@ -46,9 +59,9 @@ def stagedGameJars = [stagedMergedBase, stagedForgeRuntime, stagedNeoRuntime].fi
 // is missing its transfer component" -- a dedicated server exited 78 on a pack that launched before the bridge
 // existed. A machine that builds the game side must supply the API (-Pforbric.fabricApi=<fabric-api jar>) or the
 // build fails naming the file; a machine with no staged game jars builds neither half, exactly as before.
-def devFabricApi = file('.dev/api/fabric-api-0.155.2+26.2.jar')
+def devFabricApi = file(".dev/api/fabric-api-${fabricApiVersion}.jar")
 def stagedFabricApi = file(project.findProperty('forbric.fabricApi') ?: (devFabricApi.isFile() ? devFabricApi
-		: new File(stagedRoot.parentFile.parentFile, 'forbric-kernel/run/client-merged-pack/mods/fabric-api-0.155.2+26.2.jar')))
+		: new File(stagedRoot.parentFile.parentFile, "forbric-kernel/run/client-merged-pack/mods/fabric-api-${fabricApiVersion}.jar")))
 def transferApiModules = ['fabric-transfer-api-v1-', 'fabric-api-lookup-api-v1-', 'fabric-api-base-']
 def transferModulesDir = layout.buildDirectory.dir('transfer-api-compile')
 def extractTransferApis = tasks.register('extractTransferApis', Sync) {
@@ -114,9 +127,9 @@ def devMinecraft = file('.dev/minecraft')
 // it because the directory existed sent the transfer suite into ClassNotFoundException for netty and Commons Lang
 // with nothing saying why. The JSON is NOT proof that prepare finished -- it is the first file prepare writes -- so
 // the transferTest guard below also names any library the JSON lists that is not on disk.
-def devMinecraftPrepared = new File(devMinecraft, 'versions/26.2/26.2.json').isFile()
+def devMinecraftPrepared = new File(devMinecraft, "versions/${mcVersion}/${mcVersion}.json").isFile()
 if (devMinecraft.isDirectory() && !devMinecraftPrepared && !project.hasProperty('forbric.mcLibraries') && !System.getenv('MC_DIR'))
-	logger.lifecycle("[forbric] ${devMinecraft} has no versions/26.2/26.2.json, so Minecraft's libraries come from " +
+	logger.lifecycle("[forbric] ${devMinecraft} has no versions/${mcVersion}/${mcVersion}.json, so Minecraft's libraries come from " +
 			"${defaultMinecraft}; run `python tools/dev.py prepare` to restore it")
 def mcLibraries = file(project.findProperty('forbric.mcLibraries')
 		?: (System.getenv('MC_DIR') ? System.getenv('MC_DIR') + '/libraries'
@@ -154,7 +167,7 @@ def stagedTransferTestLibraries = []
 // Libraries the JSON lists for every platform (no OS rules) that are not on disk. Those with rules are natives for one
 // OS, so the other platforms' copies being absent is normal.
 def missingTransferTestLibraries = []
-def stagedMcVersionJson = new File(mcLibraries.parentFile, 'versions/26.2/26.2.json')
+def stagedMcVersionJson = new File(mcLibraries.parentFile, "versions/${mcVersion}/${mcVersion}.json")
 if (stagedMcVersionJson.isFile()) {
 	def versionMetadata = new groovy.json.JsonSlurper().parse(stagedMcVersionJson)
 	versionMetadata.libraries.each { library ->
@@ -290,7 +303,7 @@ tasks.named('compileRuntimeJava') {
 				+ stagedGameJars.size() + "/3 under ${stagedRoot}. Run prepareDev before building the game side.")
 		if (!stagedFabricApi.isFile()) throw new GradleException("The kernel game side includes its transfer " +
 				"component and compiles it against Fabric API's transfer modules, but ${stagedFabricApi} does not " +
-				"exist. Pass -Pforbric.fabricApi=<a fabric-api jar for 26.2> (the compatibility pack's is the default).")
+				"exist. Pass -Pforbric.fabricApi=<a fabric-api jar for ${mcVersion}> (the compatibility pack's is the default).")
 	}
 }
 // No outputs, so never up to date: it runs whenever the game side is built.
@@ -438,13 +451,13 @@ tasks.register('transferTest', Test) {
 	// after a scenario that needs none of it, so that one only warns.
 	doFirst {
 		def problem = !stagedMcVersionJson.isFile()
-				? "${stagedMcVersionJson} is absent, so Minecraft 26.2's library list is unknown"
+				? "${stagedMcVersionJson} is absent, so Minecraft ${mcVersion}'s library list is unknown"
 				: !missingTransferTestLibraries.isEmpty()
 						? "${missingTransferTestLibraries.size()} of the libraries ${stagedMcVersionJson} lists are not under " +
 								"${mcLibraries}: ${missingTransferTestLibraries.take(5).join(', ')}"
 						: null
 		if (problem == null) return
-		def advice = "Point -Pforbric.mcLibraries or MC_DIR at a Minecraft install that has run 26.2, or run " +
+		def advice = "Point -Pforbric.mcLibraries or MC_DIR at a Minecraft install that has run ${mcVersion}, or run " +
 				"`python tools/dev.py prepare`"
 		if (filter.commandLineIncludePatterns.isEmpty()) throw new GradleException("The transfer suite needs Minecraft's " +
 				"own libraries: ${problem}. ${advice}")
