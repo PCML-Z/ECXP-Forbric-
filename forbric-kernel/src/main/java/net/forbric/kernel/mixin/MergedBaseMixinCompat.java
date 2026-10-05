@@ -19,6 +19,8 @@ package net.forbric.kernel.mixin;
 import java.util.List;
 import java.util.Set;
 
+import net.forbric.kernel.config.ForbricConfig;
+
 /**
  * The guest mixins that are known not to fit the merged base, and why.
  *
@@ -46,7 +48,7 @@ public final class MergedBaseMixinCompat {
 
 	/** {@code -Dforbric.mergedBaseCompat=off} disables the built-in lists (used by the inventory tool). */
 	public static boolean enabled() {
-		return !"off".equalsIgnoreCase(System.getProperty("forbric.mergedBaseCompat", "on"));
+		return ForbricConfig.get().flag("forbric.mergedBaseCompat", "mixin.mergedBaseCompat", true);
 	}
 
 	/**

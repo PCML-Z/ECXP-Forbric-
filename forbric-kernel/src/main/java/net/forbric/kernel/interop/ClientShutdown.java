@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.interop;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -70,7 +71,16 @@ public final class ClientShutdown {
 	 * orphan from the stop-versus-addWatch race, unreachable by design — end the JVM ourselves instead of letting
 	 * vanilla's watchdog crash it. {@code -Dforbric.exitGuardHalt=false} keeps the crash for diagnosis.
 	 */
-	private static final boolean HALT_ON_ORPHAN_WORKERS = !"false".equals(System.getProperty("forbric.exitGuardHalt"));
+	/**
+	 * Whether an orphaned worker halts the JVM instead of warning.
+	 *
+	 * <p>Asked per use rather than cached in a static final: this class is loaded during boot, and a field
+	 * initialised at class-load time would freeze the answer at whatever the default was if the declaration had not
+	 * been read yet, quietly ignoring the file.
+	 */
+	private static boolean haltOnOrphanWorkers() {
+		return ForbricConfig.get().bool("forbric.exitGuardHalt", "runtime.exitGuardHalt", true);
+	}
 
 	private static volatile boolean ran;
 	/** Watchers already stopped, so a repeat sweep can tell "re-created" from "still the same one". */
@@ -267,9 +277,9 @@ public final class ClientShutdown {
 		boolean onlyIdleWorkers = alive.stream().allMatch(ClientShutdown::isIdleExecutorWorker);
 		ForbricLog.warn("[Forbric/Shutdown] %d non-daemon thread(s) still alive %d ms after the exit sweep — the JVM "
 				+ "cannot end until they do; %s:%s", alive.size(), GUARD_DEADLINE_MS,
-				onlyIdleWorkers && HALT_ON_ORPHAN_WORKERS ? "all are idle executor workers nothing can reach, exiting now"
+				onlyIdleWorkers && haltOnOrphanWorkers() ? "all are idle executor workers nothing can reach, exiting now"
 						: "on a client vanilla's shutdown watchdog will crash it, a dedicated server just never exits", report);
-		if (onlyIdleWorkers && HALT_ON_ORPHAN_WORKERS) System.exit(0);
+		if (onlyIdleWorkers && haltOnOrphanWorkers()) System.exit(0);
 	}
 
 	/** A thread-pool worker with nothing to do: parked in its work queue's take(). */

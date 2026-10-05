@@ -69,6 +69,7 @@ import net.forbric.kernel.transform.RegistryHookRedirector;
 import net.forbric.kernel.transform.TransformChain;
 import net.forbric.kernel.transform.TransformContext;
 import net.forbric.kernel.transform.TransformPhase;
+import net.forbric.kernel.config.ForbricConfig;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
@@ -202,6 +203,11 @@ public final class KernelBoot {
 
 		Path gameDir = extractGameDir(gameArgs, side.stripGameDir);
 		String gameVersion = detectGameVersion(gameJar);
+
+		// The instance's own declaration, read once here so every switch below can consult it. It has to be this
+		// early: the switches are read during class transformation, which starts before anything else in the boot
+		// reports anything, and a declaration read later would be a declaration half the decisions missed.
+		ForbricConfig.activate(gameDir);
 
 		// After a crash the last run attributed, offer to start without its suspects. Here, before arbitration,
 		// because "start without" is a line in forbric-disabled.txt and arbitration is what reads that file.
@@ -925,7 +931,7 @@ public final class KernelBoot {
 		// -Dforbric.commonNetworkInterop=off is how the two halves of this shim get told apart. Both are needed on a
 		// tri-in-one instance and they fail in opposite directions, so a single switch that removes both is the only
 		// honest way to ask "is the arbitration the cause?" of a networking symptom.
-		if (!"off".equalsIgnoreCase(System.getProperty("forbric.commonNetworkInterop", "on"))) {
+		if (ForbricConfig.get().flag("forbric.commonNetworkInterop", "runtime.commonNetworkInterop", true)) {
 			chain.register(TransformPhase.COREMOD, new CommonNetworkInteropInjector());
 			chain.register(TransformPhase.COREMOD, new SodiumConfigUserBridgeInjector());
 			chain.register(TransformPhase.COREMOD, new ForgeOverlayNeuterInjector());
@@ -937,7 +943,7 @@ public final class KernelBoot {
 		// Hardening, on its own switch because it is not a repair: without it the game is exactly vanilla, and
 		// only a mod holding a ServerLevel from a stopped integrated server can tell the difference. -off is the
 		// honest way to ask "is the guard the cause?" of any chunk-scheduling symptom.
-		if (!"off".equalsIgnoreCase(System.getProperty("forbric.chunkExecutorGuard", "on"))) {
+		if (ForbricConfig.get().flag("forbric.chunkExecutorGuard", "runtime.chunkExecutorGuard", true)) {
 			chain.register(TransformPhase.COREMOD, new ChunkExecutorGuardInjector());
 		} else {
 			ForbricLog.warn("[Forbric/ChunkGuard] -Dforbric.chunkExecutorGuard=off — chunk work offered to a "

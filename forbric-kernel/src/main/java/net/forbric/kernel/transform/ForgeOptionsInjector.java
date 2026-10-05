@@ -1,5 +1,6 @@
 package net.forbric.kernel.transform;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.util.Arrays;
 import java.util.List;
 
@@ -23,7 +24,7 @@ public final class ForgeOptionsInjector implements ClassTransformer {
 	}
 
 	@Override public byte[] transform(String className, byte[] bytes, TransformContext context) {
-		if (!TARGET.equals(className) || "off".equalsIgnoreCase(System.getProperty("forbric.forgeClientInit", "on"))) return bytes;
+		if (!TARGET.equals(className) || !ForbricConfig.get().flag("forbric.forgeClientInit", "runtime.forgeClientInit", true)) return bytes;
 		ClassNode node = new ClassNode();
 		new ClassReader(bytes).accept(node, 0);
 		if (!OPTIONS.equals(node.name)) return bytes;

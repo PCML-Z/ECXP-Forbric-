@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.boot;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.io.InputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -824,7 +825,7 @@ public final class DuplicateModArbiter {
 	 * <p>So they default to the same value and can be separated when an instance needs it.
 	 */
 	static List<Ecosystem> preference() {
-		String csv = System.getProperty("forbric.dupeIdPreference");
+		String csv = ForbricConfig.get().value("forbric.dupeIdPreference", "ecosystem.dupeIdPreference");
 		if (csv == null || csv.isBlank()) return MultiLoaderArbiter.preference();
 
 		List<Ecosystem> order = new ArrayList<>();
@@ -880,7 +881,7 @@ public final class DuplicateModArbiter {
 	 * library is contested, the family that loses is the one whose callers lose the least.
 	 */
 	static List<Ecosystem> nestedPreference() {
-		String csv = System.getProperty("forbric.nestedDupePreference");
+		String csv = ForbricConfig.get().value("forbric.nestedDupePreference", "ecosystem.nestedDupePreference");
 		if (csv == null || csv.isBlank()) return NESTED_DEFAULT;
 
 		List<Ecosystem> order = new ArrayList<>();

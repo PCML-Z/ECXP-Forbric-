@@ -89,6 +89,39 @@ Connector 已经很成熟，Forbric 还不是，所以如果 Connector 已经能
 
 Fabric mod 把自己的设置界面交给 Mod Menu 管理，所以只有同时装了 Mod Menu，Fabric mod 在这张列表里才会有 **Config** 按钮。装了 Mod Menu 后，标题界面和暂停菜单上都会有**两个** Mods 按钮。请用画着三个方块的那个：它能打开三种 mod 的设置，而 Mod Menu 自己的按钮只能打开 Fabric mod 的设置。
 
+### 调整加载器行为
+
+在那个 `mods` 文件夹旁边，Forbric 会读一个属于自己的文件：`forbric/forbric.toml`，位于你的游戏目录中。
+
+实例里其它所有声明文件的方向都相反——mod 的 `mods.toml` 或 `fabric.mod.json` 说的是**那个 mod** 需要什么，
+由那个 mod 的作者写。而这一个由**加载器**读取，说的**就是加载器**，由**搭建这个实例的人**写：整合包作者，
+或者服务器管理员。它放在游戏目录里而不是任何 jar 内部，正是因为这个原因。
+
+首次启动时若没有这个文件，Forbric 会在旁边生成 `forbric/forbric.toml.example`——每一项都是默认值，
+并逐条说明它决定什么。要改什么就把它复制成 `forbric.toml`。
+
+```toml
+[bridges]
+# 两个 Forge 家族的 hook 在合并基底上争同一个调用点，各赢下一部分。输家的那一份是死代码，
+# 所以它的事件会被重新发射给另一个家族——这就是桥。设成 "off" 则完全不装桥，
+# 此时每个家族只能收到自己的 hook 赢下来的那些事件。
+unified = "on"
+
+[ecosystem]
+# 一个 jar 同时声明多个家族时归哪一个。单家族 jar 永远归它自己声明的家族，这条对它不适用。
+preference = "neoforge,minecraftforge,fabric"
+```
+
+动手改之前，有两条规则值得知道：
+
+- **系统属性依然优先。** 启动命令里的 `-Dforbric.unifiedEvents=off` 会覆盖这个文件，
+  所以你可以只试一次启动，而不改动实例本身。
+- **有些值在这里根本设不了。** Minecraft 版本世代与锚点表是在构建 Forbric 时实测确定、
+  并与它们所命名的每个构件交叉核对过的。在这个文件里设置会被拒绝并明确告警指出是哪一项——
+  一个悄悄忽略某个键的文件，会被读成"这个文件是有效的"。
+
+这里的一切默认都是原样不变，什么都不改的文件也是最安全的交付物。
+
 ### 出了问题怎么办
 
 | 你看到的情况 | 怎么做 |
@@ -97,7 +130,7 @@ Fabric mod 把自己的设置界面交给 Mod Menu 管理，所以只有同时�
 | **弹出窗口说必要的 mod 功能不可用** | mod 的某个部分没能启动。你可以继续玩，也可以退出游戏并移除那个 mod。 |
 | **游戏崩溃** | 打开 `mods` 文件夹旁边的 `.forbric-kernel` 文件夹。里面的 `crash-analysis.txt` 会列出嫌疑最大的 mod；完整的崩溃报告在 `crash-reports/` 里。移除这些 mod 后再试一次。**0.3.0 还没有这个功能：**下次启动时会弹窗问你要不要不加载这些 mod 启动。选了的话，它们的文件名会写进 `mods` 文件夹旁边的 `forbric-disabled.txt`；想重新启用哪个 mod，就把它那一行删掉。用的是 NeoForge 版的 Sodium？请看下文的*一个已知的崩溃*。 |
 | **mod 装上了，但没有任何效果** | 打开 Forbric mod 列表——没加载完的 mod 会在那里被标出来。同样的列表也在 `load-report.txt` 里，位于 `mods` 文件夹旁边的 `.forbric-kernel` 文件夹中。常见原因是这个 mod 是为别的 Minecraft 版本做的，或者你装了它的两个版本。 |
-| **专用服务器启动不了**，日志说是兼容策略让它停下的 | 服务器没有界面可以询问你，所以会直接停下。移除它点名的 mod，或者在服务器的启动命令里加上 `-Dforbric.compatibilityPolicy=continue`，强行继续运行。 |
+| **专用服务器启动不了**，日志说是兼容策略让它停下的 | 服务器没有界面可以询问你，所以会直接停下。移除它点名的 mod，或者在 `forbric/forbric.toml` 里设 `compatibilityPolicy = "continue"`（见*调整加载器行为*），强行继续运行。 |
 | **Continuity 加载了，但玻璃方块之间仍然有边框** | 在 **选项 → 资源包** 中启用 **Default Connected Textures**（Continuity 自带）。它内置的资源包是可选的，光装上 mod 并不会自动启用。在 0.3.0 上，即使这样做了，Fabric 版的 Continuity 仍可能留下边框。这是 Forbric 的 bug。0.3.1 beta 已经修复（Releases 页面上的预发布版），但还没有进入正式版。另一个选择是使用为你的 Minecraft 版本制作的 NeoForge 版 Continuity。 |
 | **安装好像卡住了** | 通常是你和 Mojang 服务器之间有代理或 VPN。运行*安装*一节末尾的 `--doctor` 检查，然后关掉代理或 VPN 再试一次。 |
 

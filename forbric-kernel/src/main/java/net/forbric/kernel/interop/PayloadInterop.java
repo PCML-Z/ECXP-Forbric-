@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.interop;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
@@ -875,7 +876,17 @@ public final class PayloadInterop {
 	private static final String FORGE_HOOKS_COMMON = "net.minecraftforge.common.ForgeHooks";
 	private static final String FORGE_CONFIG_TRACKER = ForeignType.CONFIG_TRACKER.binary(Ecosystem.FORGE);
 	private static final String FORGE_SYNC_REGISTRIES_TASK = "net.minecraftforge.network.tasks.SyncRegistriesTask";
-	private static final boolean FORGE_HANDSHAKE = !"off".equals(System.getProperty("forbric.forgeHandshake"));
+	/**
+	 * Whether the MinecraftForge family handshake is bridged.
+	 *
+	 * <p>Asked per use rather than cached in a static final: this class is loaded during transformation, which the
+	 * boot reaches before it reads the instance's declaration, so a field initialised at class-load time would freeze
+	 * the default and quietly ignore the file.
+	 */
+	private static boolean forgeHandshake() {
+		return ForbricConfig.get().flag("forbric.forgeHandshake", "runtime.forgeHandshake", true);
+	}
+
 	private static final Map<Object, Boolean> FORGE_ACTIVATED = Collections.synchronizedMap(new WeakHashMap<>());
 	private static final Map<Object, Boolean> FORGE_CONFIG_COMPLETED = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -892,7 +903,7 @@ public final class PayloadInterop {
 	 * intention has not been read yet), so this is deliberately client-only.
 	 */
 	public static void onConnectionActive(Object connection) {
-		if (!FORGE_HANDSHAKE || connection == null) return;
+		if (!forgeHandshake() || connection == null) return;
 		if (!"CLIENTBOUND".equals(String.valueOf(invokeNoArg(connection, "getReceiving")))) return;
 		if (FORGE_ACTIVATED.putIfAbsent(connection, Boolean.TRUE) != null) return;
 		Class<?> registry = load(loaderFor(connection), FORGE_NETWORK_REGISTRY);
@@ -917,7 +928,7 @@ public final class PayloadInterop {
 	 * thread on the render thread while it does so. Everything else Forge gathers is kept, mod-added tasks included.
 	 */
 	public static void gatherForgeConfigurationTasks(Object listener) {
-		if (!FORGE_HANDSHAKE || listener == null) return;
+		if (!forgeHandshake() || listener == null) return;
 		Object connection = fieldValue(listener, "connection");
 		Object tasks = fieldValue(listener, "configurationTasks");
 		if (connection == null || !(tasks instanceof Collection<?>)) return;
@@ -1040,7 +1051,7 @@ public final class PayloadInterop {
 	 * is deduplicated per connection so a server that does send one does not load the defaults twice.
 	 */
 	public static void onClientConfigurationFinished(Object listener) {
-		if (!FORGE_HANDSHAKE || listener == null) return;
+		if (!forgeHandshake() || listener == null) return;
 		Object connection = fieldValue(listener, "connection");
 		if (connection == null) return;
 		if (FORGE_CONFIG_COMPLETED.putIfAbsent(connection, Boolean.TRUE) != null) return;

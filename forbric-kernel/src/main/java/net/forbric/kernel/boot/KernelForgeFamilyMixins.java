@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Set;
 
 import net.forbric.api.Ecosystem;
+import net.forbric.kernel.config.ForbricConfig;
 import net.forbric.kernel.mixin.MixinConfigOwners;
 import net.forbric.kernel.mixin.MixinConfigPolicy;
 import net.forbric.kernel.util.ForbricLog;
@@ -63,7 +64,7 @@ public final class KernelForgeFamilyMixins {
 
 	/** Whether the Forge-family mixin path is on. Default ON — the switch exists for bisecting, not for shipping. */
 	public static boolean enabled() {
-		return !"off".equalsIgnoreCase(System.getProperty("forbric.forgeFamilyMixins", "on"));
+		return ForbricConfig.get().flag("forbric.forgeFamilyMixins", "mixin.forgeFamily", true);
 	}
 
 	/**

@@ -49,5 +49,15 @@
  * and resolving log4j reflectively. The leak is therefore cosmetic rather than a packaging or classloading
  * problem, and inventing a logging seam for four call sites would be churn. Revisit it if a public artifact is
  * ever actually cut, not before.
+ *
+ * <h2>On the dependency back into {@code net.forbric.kernel.config.ForbricConfig}</h2>
+ *
+ * <p>One class here reads a switch through it, which is the same kind of leak as {@code ForbricLog} above and is
+ * admitted on the same terms: it appears only inside a method body, the accessor answers a plain {@code boolean},
+ * and no signature in this package mentions it. It is here because the instance declaration
+ * ({@code forbric/forbric.toml}) is read by the loader, so a switch this package exposes — whether the two Forge
+ * families' event bridge installs at all — has to consult that file as well as its system property. A switch that
+ * only knew about properties would honour {@code -Dforbric.unifiedEvents=off} and silently ignore the file, which
+ * is the failure this package's public surface exists to make impossible.
  */
 package net.forbric.api;

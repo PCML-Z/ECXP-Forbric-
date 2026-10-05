@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.boot;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -50,7 +51,7 @@ public final class KernelForgeInternalSubscribers {
     /** Optional genuine baseline context for a future carrier's explicit MOD or mod-event AUTO listeners. */
     public static Result register(ClassLoader loader, List<Path> runtimeJars, Side side,
             KernelForgeModContext.Handle baseline) {
-        if ("off".equalsIgnoreCase(System.getProperty("forbric.forgeInternalSubscribers"))) {
+        if (!ForbricConfig.get().flag("forbric.forgeInternalSubscribers", "runtime.forgeInternalSubscribers", true)) {
             ForbricLog.info("[Forbric/EBS] Forge-internal subscribers disabled by forbric.forgeInternalSubscribers=off");
             return new Result(0, 0, 0, 0, 0, 0);
         }

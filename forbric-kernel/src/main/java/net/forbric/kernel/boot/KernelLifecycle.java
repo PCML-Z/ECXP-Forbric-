@@ -31,6 +31,7 @@ import net.forbric.api.Ecosystem;
 import net.forbric.api.EventBridges;
 import net.forbric.api.GameEventBridge;
 import net.forbric.api.ForeignType;
+import net.forbric.kernel.config.ForbricConfig;
 import net.forbric.kernel.util.ForbricLog;
 import net.forbric.kernel.util.Reflect;
 import net.forbric.kernel.fabric.KernelFabricLoader;
@@ -451,7 +452,7 @@ public final class KernelLifecycle {
 	 * <p>Missing files are fine — NeoForge writes defaults. Best-effort per type; a failure is logged, not fatal.
 	 */
 	private static void loadEarlyConfigs(ClassLoader cl, Side side) {
-		if ("off".equalsIgnoreCase(System.getProperty("forbric.earlyConfigs", "on"))) {
+		if (!ForbricConfig.get().flag("forbric.earlyConfigs", "runtime.earlyConfigs", true)) {
 			ForbricLog.warn("[Forbric/Lifecycle] early config loading DISABLED (-Dforbric.earlyConfigs=off) — "
 					+ "Forge and NeoForge COMMON/CLIENT configs are not opened by the kernel; mods may keep "
 					+ "defaults or read unloaded values");
@@ -531,7 +532,7 @@ public final class KernelLifecycle {
 	 * one a moment later.
 	 */
 	private static void openLateConfigs(ClassLoader cl, Side side, String when) {
-		if ("off".equalsIgnoreCase(System.getProperty("forbric.earlyConfigs", "on"))) return;
+		if (!ForbricConfig.get().flag("forbric.earlyConfigs", "runtime.earlyConfigs", true)) return;
 		try {
 			Object result = configClass(cl).getMethod("openLate", List.class)
 					.invoke(null, lateConfigTypes(side));
@@ -897,7 +898,7 @@ public final class KernelLifecycle {
 
 	/** Keep the carrier's actual flag writable by its own failure paths; never replace its getter with true. */
 	static void setForgeLoadingState(ClassLoader cl, boolean ready) {
-		if ("off".equalsIgnoreCase(System.getProperty("forbric.forgeClientInit", "on"))) return;
+		if (!ForbricConfig.get().flag("forbric.forgeClientInit", "runtime.forgeClientInit", true)) return;
 		try {
 			Class<?> loader = Class.forName(ForeignType.FML_MOD_LOADER.binary(Ecosystem.FORGE), false, cl);
 			Field state = loader.getDeclaredField("loadingStateValid");
@@ -1536,7 +1537,7 @@ public final class KernelLifecycle {
 		} catch (ClassNotFoundException absent) {
 			return;
 		}
-		boolean enabled = !"off".equalsIgnoreCase(System.getProperty("forbric.forgeWorldgen", "on"));
+		boolean enabled = ForbricConfig.get().flag("forbric.forgeWorldgen", "runtime.forgeWorldgen", true);
 		try {
 			ForgeWorldgenShippers.report(modJars, enabled);
 		} catch (Throwable t) {
@@ -1999,7 +2000,7 @@ public final class KernelLifecycle {
 	 */
 	private static List<Object> inNeoForgeRegistrationOrder(ClassLoader cl, Class<?> registryCls,
 			List<Object> registries) {
-		if ("off".equalsIgnoreCase(System.getProperty("forbric.neoRegistrationOrder", "on"))) {
+		if (!ForbricConfig.get().flag("forbric.neoRegistrationOrder", "runtime.neoRegistrationOrder", true)) {
 			ForbricLog.warn("[Forbric/Lifecycle] NeoForge registration order DISABLED "
 					+ "(-Dforbric.neoRegistrationOrder=off) — RegisterEvent fires in field-declaration order, so a "
 					+ "mod whose items read their own data components loses them");
@@ -2045,7 +2046,7 @@ public final class KernelLifecycle {
 	}
 
 	private static int fireRegisterEvents(ClassLoader cl, List<Object> buses) throws Exception {
-		boolean neoOrder = !"off".equalsIgnoreCase(System.getProperty("forbric.neoRegistrationOrder", "on"));
+		boolean neoOrder = ForbricConfig.get().flag("forbric.neoRegistrationOrder", "runtime.neoRegistrationOrder", true);
 		if (!neoOrder) {
 			ForbricLog.warn("[Forbric/Lifecycle] NeoForge registration order DISABLED "
 					+ "(-Dforbric.neoRegistrationOrder=off) — RegisterEvent fires in field-declaration order, so a "
@@ -2583,7 +2584,7 @@ public final class KernelLifecycle {
 	 * crash. {@code -Dforbric.sodiumConfigUsers=off} skips it entirely.
 	 */
 	public static void onSodiumConfigUsers() {
-		if ("off".equalsIgnoreCase(System.getProperty("forbric.sodiumConfigUsers", "on"))) {
+		if (!ForbricConfig.get().flag("forbric.sodiumConfigUsers", "runtime.sodiumConfigUsers", true)) {
 			ForbricLog.warn("[Forbric/Sodium] -Dforbric.sodiumConfigUsers=off — a Fabric mod's Sodium options page "
 					+ "will not appear in Video Settings");
 			return;

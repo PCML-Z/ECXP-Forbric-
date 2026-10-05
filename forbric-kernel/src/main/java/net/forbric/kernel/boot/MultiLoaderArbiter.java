@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.boot;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -249,7 +250,7 @@ public final class MultiLoaderArbiter {
 	 * both arbitrations, which is the only way "prefer Fabric on this instance" can mean one thing.
 	 */
 	static List<Ecosystem> preference() {
-		String csv = System.getProperty("forbric.multiLoaderPreference");
+		String csv = ForbricConfig.get().value("forbric.multiLoaderPreference", "ecosystem.preference");
 		if (csv == null || csv.isBlank()) return DEFAULT_PREFERENCE;
 
 		List<Ecosystem> order = new ArrayList<>();

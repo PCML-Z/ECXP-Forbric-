@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.mixin;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -213,7 +214,8 @@ public final class MixinFit {
 
 	/** {@code -Dforbric.mixinFit=strict} also drops PARTIAL mixins; see {@link Result#shouldSuppress()}. */
 	public static boolean strict() {
-		return "strict".equalsIgnoreCase(System.getProperty("forbric.mixinFit", "default"));
+		return "strict".equalsIgnoreCase(
+				ForbricConfig.get().value("forbric.mixinFit", "diagnostics.mixinFit"));
 	}
 
 	/**

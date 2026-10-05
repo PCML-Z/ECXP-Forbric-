@@ -42,14 +42,22 @@ class ApiLayeringTest {
 			Path.of(System.getProperty("user.dir"), "src", "main", "java", "net", "forbric", "api");
 
 	/**
-	 * The ONE dependency back into the kernel that the package-info admits to, and the terms it admits it on.
+	 * The dependencies back into the kernel that the package-info admits to, and the terms it admits them on.
 	 *
 	 * <p>{@code ForbricLog} is allowed because it appears only inside method bodies and in no public signature, so
 	 * nothing compiling against this package's surface needs it, and because it is self-contained — JDK types and
 	 * a reflective log4j lookup. This list existing is the point: a second entry has to be argued for in a diff
 	 * rather than appearing in an import block nobody reads.
+	 *
+	 * <p>{@code ForbricConfig} is allowed on the same terms, and for the same reason it had to be considered at
+	 * all: the instance declaration ({@code forbric/forbric.toml}) is read by the loader, so every switch this
+	 * package exposes — {@code EventBridges.enabled()} above all — has to consult it, and a switch that only knew
+	 * about system properties would silently ignore the file. It appears only inside method bodies: the accessor
+	 * returns a plain {@code boolean}, so no signature in this package mentions it and nothing compiling against the
+	 * API surface needs to know a configuration package exists.
 	 */
-	private static final Set<String> ALLOWED_KERNEL_IMPORTS = Set.of("net.forbric.kernel.util.ForbricLog");
+	private static final Set<String> ALLOWED_KERNEL_IMPORTS =
+			Set.of("net.forbric.kernel.util.ForbricLog", "net.forbric.kernel.config.ForbricConfig");
 
 	/** Prefixes that would make this package name a game type. */
 	private static final List<String> GAME_PACKAGES =

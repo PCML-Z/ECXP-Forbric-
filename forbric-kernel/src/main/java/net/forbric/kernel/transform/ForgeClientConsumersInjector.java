@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.transform;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.util.List;
 
 import org.objectweb.asm.ClassReader;
@@ -58,8 +59,8 @@ public final class ForgeClientConsumersInjector implements ClassTransformer {
 	}
 
 	private static boolean enabled() {
-		return !"off".equalsIgnoreCase(System.getProperty("forbric.forgeClientConsumers"))
-				&& !"off".equalsIgnoreCase(System.getProperty("forbric.forgeClientInit"));
+		return !!ForbricConfig.get().flag("forbric.forgeClientConsumers", "runtime.forgeClientConsumers", true)
+				&& !!ForbricConfig.get().flag("forbric.forgeClientInit", "runtime.forgeClientInit", true);
 	}
 
 	@Override public String name() { return "forbric-forge-client-consumers"; }

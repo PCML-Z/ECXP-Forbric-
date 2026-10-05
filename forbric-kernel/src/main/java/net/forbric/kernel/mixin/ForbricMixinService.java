@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.mixin;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -662,12 +663,12 @@ public final class ForbricMixinService
 			}
 		}
 
-		String csv = System.getProperty("forbric.suppressMixins");
+		String csv = ForbricConfig.get().value("forbric.suppressMixins", "mixin.suppress");
 		if (csv != null && !csv.isEmpty()) {
 			collectSuppressed(List.of(csv.split(",")), configName, out);
 		}
 
-		String keep = System.getProperty("forbric.keepMixins");
+		String keep = ForbricConfig.get().value("forbric.keepMixins", "mixin.keep");
 		if (keep != null && !keep.isEmpty() && !out.isEmpty()) {
 			List<String> kept = new ArrayList<>();
 			collectSuppressed(List.of(keep.split(",")), configName, kept);
@@ -746,7 +747,7 @@ public final class ForbricMixinService
 			registeredConfigs = java.util.Collections.unmodifiableSet(all);
 		}
 
-		if (configs == null || "off".equalsIgnoreCase(System.getProperty("forbric.relaxGuestMixins", "on"))) {
+		if (configs == null || !ForbricConfig.get().flag("forbric.relaxGuestMixins", "mixin.relaxGuest", true)) {
 			guestConfigs = java.util.Set.of();
 			return;
 		}
@@ -794,7 +795,7 @@ public final class ForbricMixinService
 	static boolean isRelaxedConfig(String name) {
 		if (guestConfigs.contains(name)) return true;
 
-		String csv = System.getProperty("forbric.relaxMixinOverwrites");
+		String csv = ForbricConfig.get().value("forbric.relaxMixinOverwrites", "mixin.relaxOverwrites");
 		if (csv == null || csv.isEmpty()) return false;
 
 		for (String raw : csv.split(",")) {

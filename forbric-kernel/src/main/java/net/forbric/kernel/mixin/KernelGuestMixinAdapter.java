@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.mixin;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -871,7 +872,7 @@ public final class KernelGuestMixinAdapter {
 		String entry = configName + ":" + mixin;
 		if (MergedBaseMixinCompat.enabled() && MergedBaseMixinCompat.KEPT_MIXINS.contains(entry)) return true;
 
-		String csv = System.getProperty("forbric.keepMixins");
+		String csv = ForbricConfig.get().value("forbric.keepMixins", "mixin.keep");
 		if (csv == null || csv.isEmpty()) return false;
 
 		for (String raw : csv.split(",")) {

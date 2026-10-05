@@ -20,6 +20,7 @@ import java.util.Map;
 
 import net.forbric.api.Ecosystem;
 import net.forbric.api.ForeignType;
+import net.forbric.kernel.config.ForbricConfig;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
@@ -123,14 +124,18 @@ public final class LoaderProbePolicy {
 			ForeignType.FML_LOADER.binary(Ecosystem.FORGE), Family.FORGE,
 			ForeignType.FML_LOADER.binary(Ecosystem.NEOFORGE), Family.NEOFORGE);
 
-	private static final boolean ENABLED = !"off".equalsIgnoreCase(System.getProperty("forbric.loaderProbes", "on"));
-
 	private LoaderProbePolicy() {
 	}
 
-	/** Whether the policy is active at all, and so whether the rewriter has anything to do. */
+	/**
+	 * Whether the policy is active at all, and so whether the rewriter has anything to do.
+	 *
+	 * <p>Read through the config on every call rather than cached in a static final: this class is loaded during
+	 * class transformation, which the boot reaches BEFORE it reads the instance's declaration, so a field initialised
+	 * at class-load time would freeze the answer at whatever the default was and quietly ignore the file.
+	 */
 	public static boolean enabled() {
-		return ENABLED;
+		return ForbricConfig.get().flag("forbric.loaderProbes", "runtime.loaderProbes", true);
 	}
 
 	/** Whether {@code name} is one of the loader marker classes a mod probes for. */
@@ -152,7 +157,7 @@ public final class LoaderProbePolicy {
 			throws ClassNotFoundException {
 		Family proves = PROBES.get(name);
 
-		if (ENABLED && proves != null && !proves.name().equals(askingFamily)) {
+		if (enabled() && proves != null && !proves.name().equals(askingFamily)) {
 			ForbricLog.debug("[Forbric/Probe] told a %s class that %s does not exist — it sees the loader it was "
 					+ "loaded as (-Dforbric.loaderProbes=off to disable)", askingFamily, name);
 			throw new ClassNotFoundException(name);

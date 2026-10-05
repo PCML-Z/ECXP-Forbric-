@@ -1,6 +1,7 @@
 /* Copyright 2026 The Forbric Project. Licensed under the Apache License, Version 2.0. */
 package net.forbric.kernel.transform;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.util.Set;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -19,7 +20,7 @@ public final class SoundRegistryIdentityInjector implements ClassTransformer {
 	}
 
 	@Override public byte[] transform(String name, byte[] bytes, TransformContext context) {
-		if (!TARGET.equals(name) || "off".equalsIgnoreCase(System.getProperty("forbric.soundRegistryIdentity"))) return bytes;
+		if (!TARGET.equals(name) || !ForbricConfig.get().flag("forbric.soundRegistryIdentity", "runtime.soundRegistryIdentity", true)) return bytes;
 		ClassNode node = new ClassNode();
 		new ClassReader(bytes).accept(node, 0);
 		boolean changed = false;

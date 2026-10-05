@@ -32,6 +32,7 @@ import net.forbric.api.ModPresence;
 import net.forbric.api.Side;
 import net.forbric.api.Ecosystem;
 import net.forbric.api.ForeignType;
+import net.forbric.kernel.config.ForbricConfig;
 import net.forbric.kernel.discovery.ForbricModDiscoverer;
 import net.forbric.kernel.discovery.ModAnnotationScanner;
 import net.forbric.kernel.metadata.forge.LanguageProviders;
@@ -759,7 +760,7 @@ public final class KernelModLoader {
 	 */
 	private static void publishForgeModList(ClassLoader cl, Map<String, KernelForgeModContext.Handle> forge,
 			boolean allowEmpty) {
-		boolean enabled = !"off".equalsIgnoreCase(System.getProperty("forbric.publishModList", "on"));
+		boolean enabled = ForbricConfig.get().flag("forbric.publishModList", "runtime.publishModList", true);
 		if (!enabled) {
 			ForbricLog.warn("[Forbric/ModLoader] MinecraftForge ModList publishing DISABLED "
 					+ "(-Dforbric.publishModList=off) — a Forge mod that resolves its own container during "
@@ -848,7 +849,7 @@ public final class KernelModLoader {
 	 */
 	private static void publishNeoModList(ClassLoader cl, Map<String, NeoIdentity> neo, boolean allowEmpty) {
 		if (neo.isEmpty() && !allowEmpty) return;
-		if ("off".equalsIgnoreCase(System.getProperty("forbric.publishModList", "on"))) {
+		if (!ForbricConfig.get().flag("forbric.publishModList", "runtime.publishModList", true)) {
 			ForbricLog.warn("[Forbric/ModLoader] ModList publishing DISABLED — mods that resolve their own "
 					+ "container will fail (-Dforbric.publishModList=off)");
 			return;

@@ -19,6 +19,7 @@ package net.forbric.api;
 import java.util.EnumSet;
 import java.util.Set;
 
+import net.forbric.kernel.config.ForbricConfig;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
@@ -40,6 +41,9 @@ public final class EventBridges {
 	 * the pre-multiplexer behaviour (each family receives only the events whose hook won the byte merge). It exists
 	 * so a gate can run the same instance both ways — an assertion that both families tick 1:1 is worth little
 	 * unless the run that should break it does.
+	 *
+	 * <p>Also settable as {@code bridges.unified = "off"} in the instance's {@code forbric/forbric.toml}, which is
+	 * where a pack author sets it: this is a decision about the whole instance, not a per-launch argument.
 	 */
 	public static final String SWITCH_NAME = "forbric.unifiedEvents";
 
@@ -50,7 +54,7 @@ public final class EventBridges {
 
 	/** Whether the multiplexer should install anything at all. */
 	public static boolean enabled() {
-		return !"off".equalsIgnoreCase(System.getProperty(SWITCH_NAME, "on"));
+		return ForbricConfig.get().flag(SWITCH_NAME, "bridges.unified", true);
 	}
 
 	/** Records that {@code bridge} is live. Called by the installer, once per bridge, on success only. */

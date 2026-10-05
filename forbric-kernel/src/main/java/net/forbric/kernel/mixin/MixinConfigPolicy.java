@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.mixin;
 
+import net.forbric.kernel.config.ForbricConfig;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
@@ -50,7 +51,7 @@ public final class MixinConfigPolicy {
 			return true;
 		}
 
-		String csv = System.getProperty("forbric.disableMixinConfigs");
+		String csv = ForbricConfig.get().value("forbric.disableMixinConfigs", "mixin.disableConfigs");
 		if (csv == null || csv.isEmpty()) return false;
 
 		for (String raw : csv.split(",")) {
@@ -69,7 +70,7 @@ public final class MixinConfigPolicy {
 
 	/** Whether {@code -Dforbric.enableMixinConfigs} (csv) names {@code config}, forcing it on over the built-in list. */
 	private static boolean isForceEnabled(String config) {
-		String csv = System.getProperty("forbric.enableMixinConfigs");
+		String csv = ForbricConfig.get().value("forbric.enableMixinConfigs", "mixin.enableConfigs");
 		if (csv == null || csv.isEmpty()) return false;
 
 		for (String raw : csv.split(",")) {

@@ -121,6 +121,41 @@ your launcher, not on Forbric:
 The installer names both when it finishes. Not sure which one your launcher uses? Start the game once:
 a folder called `.forbric-kernel` appears next to the right `mods` folder.
 
+### Tuning the loader
+
+Next to that `mods` folder, Forbric reads one file of its own: `forbric/forbric.toml`, in your Game directory.
+
+Every other declaration in a Forbric instance points one way — a mod's `mods.toml` or `fabric.mod.json` says what
+*that mod* needs, and is written by that mod's author. This one is read by the **loader**, is **about** the loader,
+and is written by **whoever builds the instance**: a pack author, or the operator of a server. It lives in the game
+directory rather than inside any jar for exactly that reason.
+
+On first start with no such file, Forbric writes `forbric/forbric.toml.example` beside it — every setting at its
+default, with a line each on what it decides. Copy it to `forbric.toml` to change something.
+
+```toml
+[bridges]
+# The two Forge families' hooks compete for the same call sites on the merged base and one wins
+# each. The loser's events are re-emitted to the other family; that is the bridge. "off" installs
+# none, and each family then sees only what its own hook won.
+unified = "on"
+
+[ecosystem]
+# Which family owns a jar that declares several. A single-family jar is always owned by the
+# family it declares, and this never applies to it.
+preference = "neoforge,minecraftforge,fabric"
+```
+
+Two rules worth knowing before you edit it:
+
+- **A system property still wins.** `-Dforbric.unifiedEvents=off` on the launch command overrides the file, so you
+  can try something for one launch without changing the instance.
+- **Some values cannot be set here at all.** The Minecraft generation and the anchor tables are measured when
+  Forbric is built and cross-checked against every artifact they name. Setting one in this file is refused with a
+  warning naming it — a file that quietly ignored a key would read as a file that works.
+
+Everything here is at its default unless you change it, and a file that changes nothing is the safest thing to ship.
+
 Your launcher may call `26.2-forbric` a Fabric version. That is on purpose: a launcher shows only one mod
 loader per version, so Forbric's version tells it Fabric. PCL2 reads this, treats `26.2-forbric` as a
 modded version and suggests Fabric builds first in its mod browser. Other launchers may show it as plain
@@ -156,7 +191,7 @@ button opens settings only for Fabric mods.
 | **A window says required mod features are unavailable** | Some part of a mod could not start. You can continue playing, or quit and remove that mod. |
 | **The game crashes** | Open the `.forbric-kernel` folder next to your `mods` folder. The `crash-analysis.txt` there names the mods most likely to blame; the full crash report is in `crash-reports/`. Remove those mods and try again. **Not in 0.3.0 yet:** on the next start a window asks whether to start without those mods. That writes their file names into `forbric-disabled.txt` next to your `mods` folder; delete a line there to turn that mod back on. Using the NeoForge build of Sodium? See *A known crash* below. |
 | **A mod is installed but does nothing** | Open the Forbric mods list — a mod that did not finish loading is marked there. The same list is in `load-report.txt`, in the `.forbric-kernel` folder next to your `mods` folder. Often the mod was built for a different Minecraft version, or you have two builds of it. |
-| **A dedicated server will not start** and the log says the compatibility policy stopped it | A server has no screen to ask you on, so it stops instead. Remove the mod it names, or add `-Dforbric.compatibilityPolicy=continue` to the server's start command to run anyway. |
+| **A dedicated server will not start** and the log says the compatibility policy stopped it | A server has no screen to ask you on, so it stops instead. Remove the mod it names, or set `compatibilityPolicy = "continue"` in `forbric/forbric.toml` (see *Tuning the loader*) to run anyway. |
 | **Continuity loads, but glass still has borders between blocks** | In **Options → Resource Packs**, enable **Default Connected Textures** (included with Continuity). Its built-in packs are optional and are not enabled just by installing the mod. On 0.3.0 the Fabric build of Continuity can still leave the borders after that. That is a Forbric bug. It is fixed in the 0.3.1 beta, a pre-release on the Releases page, but not yet in a regular release. A NeoForge build of Continuity made for your Minecraft version is the other choice. |
 | **The install seems stuck** | Usually a proxy or VPN sitting between you and Mojang's servers. Run the `--doctor` check from the end of *Install*, then try again with the proxy or VPN off. |
 

@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import net.forbric.api.CompatibilityFinding;
 import net.forbric.api.CompatibilityFindings;
 import net.forbric.api.ModCatalog;
+import net.forbric.kernel.config.ForbricConfig;
 import net.forbric.kernel.classloading.ForbricClassLoader;
 import net.forbric.kernel.util.ForbricLog;
 
@@ -35,7 +36,7 @@ public final class KernelTransferInterop {
 
 	public static synchronized boolean configure(ForbricClassLoader loader) {
 		installed = false;
-		boolean requested = !"off".equalsIgnoreCase(System.getProperty("forbric.transferBridge", "on"))
+		boolean requested = ForbricConfig.get().flag("forbric.transferBridge", "runtime.transferBridge", true)
 				&& present(loader, "net/fabricmc/fabric/api/transfer/v1/storage/Storage.class")
 				&& present(loader, "net/neoforged/neoforge/transfer/ResourceHandler.class");
 		active = requested && present(loader, BRIDGE.replace('.', '/') + ".class")
@@ -49,7 +50,7 @@ public final class KernelTransferInterop {
 		}
 		// NeoForge's hopper body (ContainerOrHandler) is what fabric-transfer's hopper mixin cannot attach to; a carrier
 		// without it runs Fabric's mixin as written.
-		boolean hopperWanted = !"off".equalsIgnoreCase(System.getProperty("forbric.hopperFabricStorage", "on"))
+		boolean hopperWanted = ForbricConfig.get().flag("forbric.hopperFabricStorage", "runtime.hopperFabricStorage", true)
 				&& present(loader, "net/fabricmc/fabric/api/transfer/v1/item/ItemStorage.class")
 				&& present(loader, "net/neoforged/neoforge/transfer/item/ContainerOrHandler.class");
 		hopper = hopperWanted && present(loader, HOPPER.replace('.', '/') + ".class");

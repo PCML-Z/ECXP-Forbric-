@@ -36,6 +36,7 @@ import java.util.Set;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
+import net.forbric.kernel.config.ForbricConfig;
 import net.forbric.kernel.util.ForbricLog;
 import net.forbric.api.Ecosystem;
 import net.forbric.api.ForeignType;
@@ -138,7 +139,7 @@ public final class CommonNetworkInteropInjector implements ClassTransformer {
 	 * NeoForge's {@code super} body makes for a mod payload, {@code NetworkRegistry.handleModdedPayload}, directly.
 	 */
 	static boolean playFallThroughEnabled() {
-		return !"off".equalsIgnoreCase(System.getProperty("forbric.playPayloadFallThrough", "on"));
+		return ForbricConfig.get().flag("forbric.playPayloadFallThrough", "runtime.playPayloadFallThrough", true);
 	}
 
 	/** Asks whether NeoForge registered this payload, so the fall-through only reaches payloads it owns. */

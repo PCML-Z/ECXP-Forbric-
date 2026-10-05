@@ -16,6 +16,7 @@
 
 package net.forbric.kernel.mixin;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -84,7 +85,7 @@ public final class KernelMixinBootstrap {
 
 		// Echo the compatibility knobs. A mistyped config name in -Dforbric.suppressMixins silently does nothing,
 		// which reads exactly like "the suppression did not help" — a trap worth one log line.
-		String suppress = System.getProperty("forbric.suppressMixins");
+		String suppress = ForbricConfig.get().value("forbric.suppressMixins", "mixin.suppress");
 		if (suppress != null && !suppress.isEmpty()) {
 			ForbricLog.info("[Forbric/Mixin] suppression requested for: %s", suppress);
 		}

@@ -28,6 +28,7 @@ import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
+import net.forbric.kernel.config.ForbricConfig;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
@@ -191,7 +192,7 @@ public final class GuestInjectorPruner implements ClassTransformer {
 	 * NeoForge's appenders built, and the bridge on.
 	 */
 	public static boolean fabricTooltipBridgeOn() {
-		return !"off".equalsIgnoreCase(System.getProperty("forbric.neoTooltipAppenders", "on"))
+		return ForbricConfig.get().flag("forbric.neoTooltipAppenders", "runtime.neoTooltipAppenders", true)
 				&& !"off".equalsIgnoreCase(System.getProperty(FABRIC_TOOLTIP_BRIDGE, "on"));
 	}
 

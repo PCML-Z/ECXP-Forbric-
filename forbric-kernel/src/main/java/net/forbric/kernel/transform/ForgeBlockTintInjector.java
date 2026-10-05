@@ -1,5 +1,6 @@
 package net.forbric.kernel.transform;
 
+import net.forbric.kernel.config.ForbricConfig;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,7 +28,7 @@ public final class ForgeBlockTintInjector implements ClassTransformer {
 	}
 
 	@Override public byte[] transform(String name, byte[] bytes, TransformContext context) {
-		if (!TARGET.equals(name) || "off".equalsIgnoreCase(System.getProperty("forbric.forgeClientInit", "on"))) return bytes;
+		if (!TARGET.equals(name) || !ForbricConfig.get().flag("forbric.forgeClientInit", "runtime.forgeClientInit", true)) return bytes;
 		ClassNode node = new ClassNode();
 		new ClassReader(bytes).accept(node, 0);
 		List<MethodInsnNode> candidates = new ArrayList<>();
