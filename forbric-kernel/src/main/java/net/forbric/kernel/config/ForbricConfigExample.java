@@ -81,7 +81,22 @@ final class ForbricConfigExample {
 				# restores everything-throws.
 				packMetadataFailSoft = "on"
 
-				# compatibilityPolicy = "ask"
+				# What happens when a mod did not finish loading.
+				#
+				# A mod counts as a problem both when its constructor or entrypoint threw (FAILED — its container is
+				# withdrawn) AND when only part of it did not run (DEGRADED — a setup phase threw, a mixin was
+				# suppressed, a field it reads drifted, a capability it declares nobody implements). Both require a
+				# decision, and on a client that means the launch stops and asks.
+				#
+				# "ask" is the default and opens that window. "continue" launches anyway and records the loss in
+				# .forbric-kernel/load-report.txt. "strict" stops with nobody asked.
+				#
+				# Set this to "continue" for an instance you have checked. A partial loss is deliberately
+				# over-reported — a mod's optional dependency may be absent on purpose, and a mixin the mod's own
+				# plugin declined is not a fault at all — so an instance that used to start can stop here, and some of
+				# those stops will be false. That is the trade for a player being able to act on it instead of
+				# wondering why a mod does nothing.
+				compatibilityPolicy = "ask"
 
 				[mixin]
 				# guest mixin configs, whole, to relax. A guest injector whose anchor the merge moved is a soft skip

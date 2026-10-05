@@ -30,8 +30,6 @@ def moduleVersion = { File dir ->
 	m[0][1]
 }
 def kernelJar  = { "forbric-kernel-${moduleVersion(kernelDir)}.jar" }
-def loaderJar  = { "forbric-loader-${moduleVersion(loaderDir)}.jar" }
-def runtimeJar = { "forbricruntime-${moduleVersion(loaderDir)}.jar" }
 def genResources = layout.buildDirectory.dir('generated-resources')
 // The merge tools ride in EVERY build, slim included. They are 284 KB and they are what turns a
 // machine with no prebuilt artifacts into one that can make them; fetching them over the network
@@ -51,21 +49,13 @@ tasks.register('buildForbricJars', Exec) {
 	outputs.dir("${kernelDir}/build/libs")
 }
 
-// The loader's two jars, which the installer ALSO bundles and which nothing here used to build. Without this
-// the task below consumed whatever happened to be in the loader's build/libs — on this machine, jars from four
-// days before the release — and a clean clone had nothing to consume at all.
-tasks.register('buildLoaderJars', Exec) {
-	description = "Build the forbric-loader jars the installer bundles."
-	workingDir loaderDir
-	commandLine(isWindows ? ['cmd', '/c', 'gradlew.bat', 'jar', 'runtimeJar']
-			: ['./gradlew', 'jar', 'runtimeJar'])
-	inputs.dir("${loaderDir}/src/main")
-	inputs.file("${loaderDir}/build.gradle")
-	outputs.dir("${loaderDir}/build/libs")
-}
-
 // The byte-merge tools, shaded with the ASM they need. Not a library of the installer's — it is run as a
 // subprocess (4 GB heap, which this JVM cannot grant itself), so it travels as a resource and is unpacked.
+//
+// The first generation's `forbric-loader` / `forbricruntime` jars used to be built and bundled here too, by a
+// `buildLoaderJars` task above. They are gone: the kernel vendors what it needs from Fabric Loader itself, so the
+// Knot bootstrap they carried is unreachable, and shipping them made the installed profile list libraries that
+// nothing provides — a silent fallback rather than a visible absence.
 tasks.register('buildMergeTools', Exec) {
 	description = "Build the merge-tools jar the installer ships and runs."
 	workingDir loaderDir
@@ -76,8 +66,8 @@ tasks.register('buildMergeTools', Exec) {
 	// cover: a baseline-only change left this task UP-TO-DATE and the installer shipping the previous baseline,
 	// so players' installs judged the merge against a different list than every gate in the tree.
 	inputs.file(linkBaseline).withPropertyName('linkBaseline')
-	// The one file this task makes. Declaring the shared build/libs let buildLoaderJars' output decide whether
-	// this task was up to date.
+	// The one file this task makes. It used to declare the shared build/libs directory instead, so whatever else
+	// happened to be in ../forbric-loader/build/libs decided whether this task was up to date.
 	outputs.file(mergeToolsJar)
 }
 
@@ -127,13 +117,11 @@ tasks.named('test') { failOnNoDiscoveredTests = false }
 
 tasks.register('bundleForbric') {
 	description = "Copy Forbric's own jars into the installer's resources, with a manifest describing them."
-	dependsOn 'buildForbricJars', 'buildLoaderJars', 'buildMergeTools'
+	dependsOn 'buildForbricJars', 'buildMergeTools'
 	// Without these the task is "up to date" the moment its output directory exists, and the installer keeps
 	// shipping whichever kernel jar it bundled first — an install that silently predates the fix you just made.
 	inputs.files(
 			file("${kernelDir}/build/libs/${kernelJar()}"),
-			file("${loaderDir}/build/libs/${loaderJar()}"),
-			file("${loaderDir}/build/libs/${runtimeJar()}"),
 			mergeToolsJar)
 			.withPropertyName('forbricJars')
 			.withPathSensitivity(PathSensitivity.NONE)
@@ -160,10 +148,13 @@ tasks.register('bundleForbric') {
 			            size: src.length()]
 		}
 
-		// Forbric's own code (Apache-2.0).
+		// Forbric's own code (Apache-2.0). Only the kernel: the first generation's loader and runtime jars are NOT
+		// bundled. The kernel is a sovereign implementation that vendors what it needs from Fabric Loader itself
+		// (net/fabricmc/loader/ in forbric-kernel), so the Knot-hosted bootstrap those two jars existed to carry is
+		// dead weight that the installed profile then lists as a library nothing provides — an accidental fallback
+		// for a missing Fabric Loader AFI. The merge tools still come from ../forbric-loader, which is a build-time
+		// tool rather than a shipped artifact.
 		add('net.forbric:forbric-kernel:' + project.version, new File(kernelDir, "build/libs/${kernelJar()}"))
-		add('net.forbric:forbric-loader:' + project.version, new File(loaderDir, "build/libs/${loaderJar()}"))
-		add('net.forbric:forbricruntime:' + project.version, new File(loaderDir, "build/libs/${runtimeJar()}"))
 
 		// The kernel's own third-party dependencies, taken from the classpath the kernel itself reports so the
 		// installed profile cannot drift from what the gates run. All permissively licensed; staged locally so a
@@ -195,7 +186,7 @@ tasks.register('bundleForbric') {
 // runs as a subprocess, not something the installed profile puts on a classpath.
 tasks.register('bundleTools') {
 	description = "Copy the merge-tools jar into the installer's resources."
-	dependsOn 'buildMergeTools', 'buildLoaderJars'
+	dependsOn 'buildMergeTools'
 	// The loader dropped the -SNAPSHOT qualifier at 0.1.0, so this is the name :mergeToolsJar writes. Asking
 	// for the old one still "worked" for as long as a jar built before that release sat in build/libs: the
 	// bundled tools would have been whatever was last built under the old name, silently, forever.

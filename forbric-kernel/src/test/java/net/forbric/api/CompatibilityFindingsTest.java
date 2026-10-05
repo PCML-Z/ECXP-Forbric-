@@ -88,20 +88,34 @@ class CompatibilityFindingsTest {
 	}
 
 	@Test
-	void legacyFailuresStayVisibleWithoutGuessingThatTheirFeaturesAreRequired() {
+	void aDegradedRowIsVisibleAndRequired() {
+		// This test used to assert the opposite — that a DEGRADED row stayed visible WITHOUT becoming required —
+		// and the name said "without guessing that their features are required". The policy changed: a mod that is
+		// installed, loaded and reported as fine while quietly not working is the failure this project keeps paying
+		// for, so a partial loss now requires a decision exactly as a total one does.
+		//
+		// What is NOT invented is which feature broke or how badly. The reason text is carried through verbatim as
+		// the evidence, keyed by that text, and the catalogue still lists the row with its real status — so a report
+		// reader can see it was DEGRADED (partial) rather than FAILED (withdrawn) and can tell a false stop from a
+		// real one. The escape hatch is the policy, not a weaker finding.
 		ModCatalog.publish(List.of(entry()));
 		ModCatalog.mark("demo", ModCatalog.Status.DEGRADED, "old diagnostic with no structured proof");
 		CompatibilityFindings.observeInitializationFailures();
 		var parsed = com.electronwill.nightconfig.json.JsonFormat.fancyInstance().createParser()
 				.parse(new StringReader(CompatibilityFindings.toJson()));
-		assertEquals(0, ((Number) parsed.get("confirmedRequired")).intValue());
-		assertTrue(((List<?>) parsed.get("findings")).isEmpty());
+		assertEquals(1, ((Number) parsed.get("confirmedRequired")).intValue());
+		assertEquals(1, ((List<?>) parsed.get("findings")).size());
+		var finding = CompatibilityFindings.confirmedRequired().getFirst();
+		assertEquals("demo", finding.modId());
+		assertEquals("initialization:degraded:old diagnostic with no structured proof", finding.id(),
+				"keyed by the reason text, because each producer describes itself in its own words");
+		assertTrue(finding.evidence().contains("ModCatalog.Status.DEGRADED"),
+				"the report must say which status produced this, or a reader cannot tell a partial loss from a withdrawal");
 		List<?> legacy = parsed.get("catalogFailures");
-		assertEquals(1, legacy.size(), "zero confirmed findings is not proof that every mod worked");
+		assertEquals(1, legacy.size(), "the row is still listed with its own status, not only as a finding");
 		var row = (com.electronwill.nightconfig.core.UnmodifiableConfig) legacy.getFirst();
 		assertEquals("UNCLASSIFIED", row.get("classification"));
 		assertEquals("DEGRADED", row.get("status"));
-		assertTrue(!row.contains("required"), "legacy prose must not be converted into invented necessity");
 	}
 
 	@Test

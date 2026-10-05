@@ -1,6 +1,7 @@
 /* Copyright 2026 The Forbric Project. Licensed under the Apache License, Version 2.0. */
 package net.forbric.kernel.boot;
 
+import net.forbric.api.CompatibilityFinding;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.StringReader;
@@ -74,7 +75,11 @@ public class InitializationFailureProjectionTest {
 		}
 	}
 
-	@Test void realThrowingConstructorUsesTheExistingWithdrawalContractWithoutPromotingOptionalDegradation() throws Exception {
+	@Test void aThrowingConstructorAndADegradedRowBothRequireADecision() throws Exception {
+		// DEGRADED used to be a NOTE: it reached load-report.txt as an UNCLASSIFIED line and the launch continued.
+		// It now requires a decision like FAILED does, because a mod that is installed, loaded and reported as fine
+		// while quietly not working is the failure this project keeps paying for. The writer is still a safe report
+		// primitive — it never throws — so the escalation happens at the decision, not here.
 		ModCatalog.publish(List.of(entry("badctor", Ecosystem.NEOFORGE), entry("optional", Ecosystem.FABRIC)));
 		var thrown = assertThrows(InvocationTargetException.class, () -> ThrowsDuringConstruction.class.getConstructor().newInstance());
 		assertInstanceOf(IllegalStateException.class, thrown.getCause());
@@ -84,9 +89,21 @@ public class InitializationFailureProjectionTest {
 		ModCatalog.mark("optional", ModCatalog.Status.DEGRADED, "optional setup feature failed");
 		System.setProperty(CompatibilityDecision.PROPERTY, "strict");
 		assertDoesNotThrow(() -> KernelLoadReport.writeTo(directory.resolve("load-report.txt")), "the writer remains a safe report primitive");
-		var finding = CompatibilityFindings.confirmedRequired().getFirst();
-		assertEquals("badctor", finding.modId()); assertEquals("initialization:constructor", finding.id());
-		assertEquals(1, CompatibilityFindings.confirmedRequired().size());
+
+		var required = CompatibilityFindings.confirmedRequired();
+		assertEquals(2, required.size(), "the constructor failure AND the degraded row both require a decision now");
+		CompatibilityFinding constructor = required.stream()
+				.filter(f -> f.modId().equals("badctor")).findFirst().orElseThrow();
+		assertEquals("initialization:constructor", constructor.id());
+		// The DEGRADED row is keyed by its reason text, because a dozen producers each describe themselves in their
+		// own words and there is no vocabulary to enumerate them by.
+		CompatibilityFinding degraded = required.stream()
+				.filter(f -> f.modId().equals("optional")).findFirst().orElseThrow();
+		assertEquals("initialization:degraded:optional setup feature failed", degraded.id());
+		assertTrue(degraded.required(), "a DEGRADED row is required in full; the escape hatch is the policy, not this flag");
+		assertTrue(degraded.evidence().contains("ModCatalog.Status.DEGRADED"),
+				"the report has to say which status produced it, or an operator cannot tell a stop caused by a partial loss");
+
 		String json = Files.readString(directory.resolve("compatibility-report.json"));
 		assertTrue(json.contains("\"classification\":\"UNCLASSIFIED\"")); assertTrue(json.contains("optional setup feature failed"));
 	}

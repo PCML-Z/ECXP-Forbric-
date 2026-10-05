@@ -18,10 +18,26 @@ public final class CompatibilityFindings {
 	 * sources: withdrawn @Mod construction, and Fabric main/client/server entrypoint failure. Partial setup and
 	 * optional feature losses use DEGRADED and are deliberately not promoted here. This never calls mark(), reads
 	 * the projected catalogue, or infers recovery from a later catalogue publication.
+	 *
+	 * <p><b>DEGRADED is promoted too, and that is a deliberate policy choice with a cost.</b> A DEGRADED row means
+	 * part of a mod did not run: a setup phase threw, a mixin was suppressed, a field it reads drifted, a capability
+	 * it declares nobody implements. The launch used to continue past all of that with a WARN and a line in
+	 * {@code load-report.txt}, which is the failure this project keeps paying for — a mod that is installed,
+	 * loaded, and reported as fine while quietly not working. A player cannot act on that; they can act on a launch
+	 * that stops and names the mod.
+	 *
+	 * <p>What that costs is honest and worth stating plainly. DEGRADED is deliberately over-reporting by design
+	 * ({@code FabricApiModuleLossAudit} chose the conservative direction for exactly this reason), and some of its
+	 * producers are inferences rather than certainties: a mod's optional dependency may be absent on purpose, and a
+	 * mixin the mod's own plugin declined is not a fault at all. So instances that used to start may now stop, and
+	 * some of those stops will be false. The escape hatch is unchanged and still works — {@code
+	 * forbric.compatibilityPolicy=continue} in {@code forbric/forbric.toml} — and it is the same lever that was
+	 * always there for a required loss, so an operator who hits this has a documented way forward rather than a
+	 * dead end.
 	 */
 	public static synchronized void observeInitializationFailures() {
 		for (ModCatalog.Entry entry : ModCatalog.unclassifiedFailures()) {
-			if (entry.status() != ModCatalog.Status.FAILED) continue;
+			if (entry.status() != ModCatalog.Status.FAILED && entry.status() != ModCatalog.Status.DEGRADED) continue;
 			// A jar whose metadata could not be read already carries its classified finding (metadata:<family>);
 			// its row exists only so that finding has somewhere to show. A second, catalog-derived one would count
 			// the same loss twice.
@@ -40,6 +56,7 @@ public final class CompatibilityFindings {
 	private static List<CompatibilityFinding> initializationFindings(ModCatalog.Entry entry) {
 		List<CompatibilityFinding> result = new ArrayList<>();
 		String detail = entry.statusDetail().isBlank() ? "The mod did not finish required initialization" : entry.statusDetail();
+		boolean failed = entry.status() == ModCatalog.Status.FAILED;
 		for (String reason : detail.split("; ")) {
 			String phase;
 			String source;
@@ -54,20 +71,29 @@ public final class CompatibilityFindings {
 				default -> {
 					// A FAILED row may also retain earlier DEGRADED reasons. They are not new necessary
 					// failures merely because a later client/main constructor failure raised the row's status.
-					continue;
+					if (failed) continue;
+					// A DEGRADED row, by contrast, is required in full. Its reasons come from a dozen producers
+					// that each describe themselves in their own words — a suppressed mixin, a drifted field, a
+					// capability nobody implements, a plugin that declined its own mixin — so there is no
+					// vocabulary to enumerate them by, and the reason text is the only description any of them
+					// carries. Keyed by the text so the same reason on two rows stays one finding.
+					phase = "degraded:" + reason;
+					source = "ModCatalog.Status.DEGRADED";
 				}
 			}
 			result.add(new CompatibilityFinding("initialization:" + phase, entry.modId(), "Mod initialization", source,
 					CompatibilityFinding.Confidence.CONFIRMED, true, reason,
-					List.of("ModCatalog.Status.FAILED", "phase=" + phase, "ecosystem=" + entry.ecosystem(),
+					List.of("ModCatalog.Status." + entry.status(), "phase=" + phase, "ecosystem=" + entry.ecosystem(),
 							"jar=" + entry.jar(), "version=" + entry.version(), reason)));
 		}
 		if (result.isEmpty()) {
-			// Unknown FAILED producers still require a decision, but the aggregate state is the evidence:
+			// Unknown producers still require a decision, but the aggregate state is the evidence:
 			// do not infer that each prose fragment was a separate necessary initialization phase.
 			String id = "initialization:catalog:" + java.util.UUID.nameUUIDFromBytes(detail.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-			result.add(new CompatibilityFinding(id, entry.modId(), "Mod initialization", "ModCatalog.Status.FAILED",
-					CompatibilityFinding.Confidence.CONFIRMED, true, detail, List.of("ModCatalog.Status.FAILED", detail)));
+			result.add(new CompatibilityFinding(id, entry.modId(), "Mod initialization",
+					"ModCatalog.Status." + entry.status(),
+					CompatibilityFinding.Confidence.CONFIRMED, true, detail,
+					List.of("ModCatalog.Status." + entry.status(), detail)));
 		}
 		return result;
 	}

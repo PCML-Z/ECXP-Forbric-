@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 
+import net.forbric.kernel.config.ForbricConfig;
 import net.forbric.api.CompatibilityFinding;
 import net.forbric.api.CompatibilityFindings;
 import net.forbric.api.ModCatalog;
@@ -31,9 +32,19 @@ public final class CompatibilityDecision {
 
 	private CompatibilityDecision() { }
 
-	/** Invalid values fail closed instead of silently disabling a required confirmation. */
+	/**
+	 * Invalid values fail closed instead of silently disabling a required confirmation.
+	 *
+	 * <p>Read through the instance declaration as well as the system property, so an operator can settle this in
+	 * {@code forbric/forbric.toml} beside the mods it is about. The property still wins: it is the more deliberate
+	 * statement, made at one launch.
+	 */
 	public static Policy policy() {
-		return switch (System.getProperty(PROPERTY, "ask").toLowerCase(java.util.Locale.ROOT)) {
+		// The default applies when neither source says anything, so an instance with no declaration file and no
+		// property behaves as it always did. A null here would be the switch itself NPEing on the default.
+		String raw = ForbricConfig.get().value(PROPERTY, "diagnostics.compatibilityPolicy");
+		if (raw == null || raw.isBlank()) raw = "ask";
+		return switch (raw.toLowerCase(java.util.Locale.ROOT)) {
 			case "ask" -> Policy.ASK;
 			case "continue" -> Policy.CONTINUE;
 			case "strict" -> Policy.STRICT;
