@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Boot the MC 26.2 CLIENT through the SOVEREIGN KERNEL (no Knot, no genuine FML/FancyModLoader lifecycle) from the
+# Boot the MC CLIENT through the SOVEREIGN KERNEL (no Knot, no genuine FML/FancyModLoader lifecycle) from the
 # merged 3-ABI base, with the Forge + NeoForge runtime jars as PASSIVE ABI carriers. M5 goal: reach the TITLE screen.
 #
-# Parent -cp: kernel boot jar + kernel deps + MC 26.2 libraries (incl. LWJGL). Owned (transform-loaded): merged
+# Parent -cp: kernel boot jar + kernel deps + MC libraries (incl. LWJGL). Owned (transform-loaded): merged
 # base + forge-runtime + neoforge-runtime + the MC libraries (via --libraryPath, so mods can mixin into them).
 #
 # macOS: -XstartOnFirstThread is MANDATORY (GLFW must own the main thread); the kernel invokes the client Main on
 # that same thread, so the window is created on thread 0 as GLFW requires.
 #
-# Usage: [RUNDIR=…] [FORBRIC_JVM=…] ./launch-kernel-client.sh [extra game args]
+# Usage: [MC_VER=…] [RUNDIR=…] [FORBRIC_JVM=…] ./launch-kernel-client.sh [extra game args]
+#   MC_VER   the Minecraft generation to boot (default 26.2).
 set -uo pipefail
 
+MC_VER="${MC_VER:-26.2}"
 MC="${MC_DIR:-$HOME/Library/Application Support/minecraft}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 KERNEL="$(cd "$HERE/.." && pwd)"
@@ -19,19 +21,22 @@ KERNEL="$(cd "$HERE/.." && pwd)"
 OLD="$(cd "${FORBRIC_OLD:-$KERNEL/../forbric-loader}" && pwd)"
 STAGE="$OLD/run"
 
-MERGED="${MERGED:-$STAGE/merged-base/patched-mc-merged-26.2.jar}"
+MERGED="${MERGED:-$STAGE/merged-base/patched-mc-merged-$MC_VER.jar}"
 FORGE_RT="${FORGE_RT:-$STAGE/merged-base/forge-runtime-interop.jar}"
 [ -f "$FORGE_RT" ] || FORGE_RT="$STAGE/forge-runtime/forge-runtime.jar"
 NEO_RT="${NEO_RT:-$STAGE/neoforge-runtime/neoforge-runtime.jar}"
 RUNDIR="${RUNDIR:-$KERNEL/run/client-kernel}"
-NATIVES="${NATIVES_DIR:-$MC/versions/26.2/26.2-natives}"
+# 26.2 ships a version-scoped natives folder; older generations use the plain one. Try the scoped name first and
+# fall back, so MC_VER does not have to know which naming its generation uses.
+NATIVES="${NATIVES_DIR:-$MC/versions/$MC_VER/$MC_VER-natives}"
+[ -d "$NATIVES" ] || NATIVES="$MC/versions/$MC_VER/natives"
 ASSETS="$MC/assets"
 mkdir -p "$RUNDIR/mods"
 
 [ -f "$MERGED" ] || { echo "merged base not found: $MERGED (run $STAGE/build-merged-base.sh)" >&2; exit 2; }
 [ -d "$NATIVES" ] || { echo "LWJGL natives not found: $NATIVES" >&2; exit 2; }
 
-if ! "$KERNEL/gradlew" --offline -q -p "$KERNEL" jar >/tmp/forbric-kernel-jar.log 2>&1; then
+if ! "$KERNEL/gradlew" --offline -q -p "$KERNEL" -Pforbric.mcVersion="$MC_VER" jar >/tmp/forbric-kernel-jar.log 2>&1; then
   echo "[kernel-launch] FATAL: kernel jar build failed — refusing to launch a stale jar" >&2
   grep -vE 'WARNING: |native-access|Restricted method|--enable-native' /tmp/forbric-kernel-jar.log >&2
   exit 3
@@ -39,25 +44,25 @@ fi
 # Overridable so a gate can hand the JVM a COPY and then do something to that copy while the game runs --
 # which is how "the kernel jar was replaced mid-session" is reproduced without touching the real build output.
 BOOT_JAR="${FORBRIC_BOOT_JAR:-$(ls "$KERNEL"/build/libs/forbric-kernel-*.jar | head -1)}"
-BOOT_DEPS="$("$KERNEL/gradlew" --offline -q -p "$KERNEL" printBootClasspath 2>/dev/null | grep -vE 'WARNING|native|Restricted|enable' | tail -1)"
+BOOT_DEPS="$("$KERNEL/gradlew" --offline -q -p "$KERNEL" -Pforbric.mcVersion="$MC_VER" printBootClasspath 2>/dev/null | grep -vE 'WARNING|native|Restricted|enable' | tail -1)"
 
-# MC 26.2 libraries (parent-loaded), resolved from the Mojang install's version json. Includes LWJGL.
-VANILLA_CP="$(python3 - "$MC" <<'PY'
+# MC libraries (parent-loaded), resolved from the Mojang install's version json for THIS generation. Includes LWJGL.
+VANILLA_CP="$(python3 - "$MC" "$MC_VER" <<'PY'
 import json, os, sys
-mc = sys.argv[1]
-d = json.load(open(os.path.join(mc, 'versions', '26.2', '26.2.json')))
+mc, ver = sys.argv[1], sys.argv[2]
+d = json.load(open(os.path.join(mc, 'versions', ver, ver + '.json')))
 out = []
 for lib in d.get('libraries', []):
     p = lib.get('name', '').split(':')
     if len(p) < 3: continue
-    grp, art, ver = p[0].replace('.', '/'), p[1], p[2]
+    grp, art, v = p[0].replace('.', '/'), p[1], p[2]
     cls = ('-' + p[3]) if len(p) > 3 else ''
-    jar = os.path.join(mc, 'libraries', grp, art, ver, f"{art}-{ver}{cls}.jar")
+    jar = os.path.join(mc, 'libraries', grp, art, v, f"{art}-{v}{cls}.jar")
     if os.path.exists(jar): out.append(jar)
 print(os.pathsep.join(out))
 PY
 )"
-ASSET_INDEX="$(python3 -c "import json;print(json.load(open('$MC/versions/26.2/26.2.json'))['assetIndex']['id'])")"
+ASSET_INDEX="$(python3 -c "import json;print(json.load(open('$MC/versions/$MC_VER/$MC_VER.json'))['assetIndex']['id'])")"
 
 
 # Game root metadata (version.json) on the PARENT -cp, as a resources-only jar. Mods that ask

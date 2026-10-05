@@ -103,11 +103,19 @@ public final class Main {
 		// --dir is optional and falls back to wherever the launcher would keep Minecraft.
 		if (doctor) {
 			Path target = dir != null ? dir : Util.defaultMinecraftDir();
-			System.exit(new Doctor(System.out::println).examine(target, jdk, artifacts).ok() ? 0 : 1);
+			System.exit(new Doctor(System.out::println).examine(target, jdk, artifacts, mcVersion).ok() ? 0 : 1);
 		}
 		if (dir == null) {
 			System.err.println("--dir is required when running without a window");
 			usage(System.err);
+			System.exit(2);
+		}
+		// Refuse an unknown --mc up front, naming what IS supported. Silently coercing it to the default would
+		// build a carrier for one Minecraft while the profile claims another — the exact silent mismatch the
+		// installer exists to prevent.
+		if (!Pins.isSupported(mcVersion)) {
+			System.err.println("unsupported Minecraft version: " + mcVersion);
+			System.err.println("this installer supports: " + String.join(", ", Pins.supportedMinecraftVersions()));
 			System.exit(2);
 		}
 		// --offline rules the release out entirely; anything else keeps it attached, as the payload's fallback
@@ -155,7 +163,8 @@ public final class Main {
 		out.println("       with no arguments, opens the installer window");
 		out.println();
 		out.println("  --dir DIR        the Minecraft directory to install into");
-		out.println("  --mc " + Pins.MINECRAFT + "        the base version (default " + Pins.MINECRAFT + ")");
+		out.println("  --mc VERSION    the base version: " + String.join(", ", Pins.supportedMinecraftVersions())
+				+ " (default " + Pins.DEFAULT_MINECRAFT + ")");
 		out.println("  --artifacts DIR  developers only: a merged game base and both runtimes you built from");
 		out.println("                   source, used instead of building them. Leave it out: the installer");
 		out.println("                   downloads and builds everything it needs.");

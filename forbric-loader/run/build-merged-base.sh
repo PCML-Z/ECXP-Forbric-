@@ -1,21 +1,28 @@
 #!/usr/bin/env bash
-# Build the tri-in-one MERGED patched-Minecraft base: vanilla 26.2 + BOTH the traditional-MinecraftForge and
+# Build the tri-in-one MERGED patched-Minecraft base: vanilla + BOTH the traditional-MinecraftForge and
 # the NeoForge injections in one jar (so Forbric can run Forge + NeoForge + Fabric mods in one instance).
 # Compiles src/tools/MergedBaseBuilder against ASM (resolved from the gradle cache) and runs it.
 #
-# Usage: [VANILLA=…] [FORGE=…] [NEO=…] [OUT=…] ./build-merged-base.sh
+# Usage: [MC_VER=…] [FORGE_VER=…] [VANILLA=…] [FORGE=…] [NEO=…] [OUT=…] ./build-merged-base.sh
+#   MC_VER     the Minecraft generation (default 26.2). Selects the vanilla jar, the merged output name and the
+#              NeoForge-patched side's directory.
+#   FORGE_VER  the MinecraftForge build in <mc>-<fml> form (default 26.2-65.0.1); it names the patched-mc-forge
+#              directory the installer stages.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PROJECT="$(cd "$HERE/.." && pwd)"
 MC="${MC_DIR:-$HOME/Library/Application Support/minecraft}"
 
-VANILLA="${VANILLA:-$MC/versions/26.2/26.2.jar}"
-FORGE="${FORGE:-$MC/libraries/net/forbric/patched-mc-forge/26.2-65.0.1/patched-mc-forge-26.2-65.0.1.jar}"
-NEO="${NEO:-$HERE/neoforge-patched/patched-mc-neoforge-26.2.jar}"
+MC_VER="${MC_VER:-26.2}"
+FORGE_VER="${FORGE_VER:-26.2-65.0.1}"
+
+VANILLA="${VANILLA:-$MC/versions/$MC_VER/$MC_VER.jar}"
+FORGE="${FORGE:-$MC/libraries/net/forbric/patched-mc-forge/$FORGE_VER/patched-mc-forge-$FORGE_VER.jar}"
+NEO="${NEO:-$HERE/neoforge-patched/patched-mc-neoforge-$MC_VER.jar}"
 FORGE_RT="${FORGE_RT:-$HERE/forge-runtime/forge-runtime.jar}"
 NEO_RT="${NEO_RT:-$HERE/neoforge-runtime/neoforge-runtime.jar}"
-OUT="${OUT:-$HERE/merged-base/patched-mc-merged-26.2.jar}"
+OUT="${OUT:-$HERE/merged-base/patched-mc-merged-$MC_VER.jar}"
 REPORT="${REPORT:-$HERE/merged-base/merge-conflicts.txt}"
 
 for f in "$VANILLA" "$FORGE" "$NEO" "$FORGE_RT" "$NEO_RT"; do

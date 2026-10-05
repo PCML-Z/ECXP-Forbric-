@@ -87,7 +87,7 @@ public final class MergedBaseLinkGateTest {
 		Files.writeString(Files.createDirectories(forgeClasses.resolve("META-INF")).resolve("MANIFEST.MF"),
 				"Manifest-Version: 1.0\r\nImplementation-Title: MinecraftForge\r\nImplementation-Version: 65.0.1\r\n\r\n");
 		Files.writeString(Files.createDirectories(neoClasses.resolve("META-INF")).resolve("MANIFEST.MF"),
-				"Manifest-Version: 1.0\r\nImplementation-Title: NeoForge\r\nImplementation-Version: " + Pins.NEOFORGE
+				"Manifest-Version: 1.0\r\nImplementation-Title: NeoForge\r\nImplementation-Version: " + Pins.neoforge()
 						+ "\r\n\r\n");
 		jar(forgeClasses, interop);
 		jar(forgeClasses, raw);

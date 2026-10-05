@@ -45,10 +45,12 @@ import javax.swing.WindowConstants;
 
 /** The window: pick a game version, a loader version and a directory, then press Install. */
 final class InstallerGui {
-	static final String DEFAULT_VERSION = "26.2";
+	/** The version the GUI pre-selects; every supported version is offered in the dropdown. */
+	static final String DEFAULT_VERSION = Pins.DEFAULT_MINECRAFT;
 
 	private final JFrame frame = new JFrame("Forbric Installer");
-	private final JComboBox<String> gameVersion = new JComboBox<>(new String[] {DEFAULT_VERSION});
+	private final JComboBox<String> gameVersion =
+			new JComboBox<>(Pins.supportedMinecraftVersions().toArray(new String[0]));
 	private final JComboBox<String> loaderVersion = new JComboBox<>(new String[] {loaderVersion()});
 	private final JTextField directory = new JTextField(Util.defaultMinecraftDir().toString());
 	private final JTextField artifacts = new JTextField();

@@ -70,6 +70,7 @@ final class ArtifactBuilder {
 	 * @return coordinate (without version) to the finished file, in the shape {@link GameArtifacts#all()} returns
 	 */
 	Map<String, Path> build(Path mcDir, String mcVersion, JdkLocator.Jvm jvm) throws IOException {
+		Pins.PinSet pins = Pins.forVersion(mcVersion);
 		Path build = mcDir.resolve(".forbric-build");
 		Path dl = build.resolve("dl");
 		Path tools = build.resolve("tools");
@@ -85,14 +86,14 @@ final class ArtifactBuilder {
 		log.accept("");
 		log.accept("Building the game artifacts. The first run downloads a few hundred megabytes and takes");
 		log.accept("several minutes; afterwards it is cached in " + build + ".");
-		log.accept("pins: " + Pins.stamp());
+		log.accept("pins: " + pins.stamp());
 
 		Http http = new Http(log);
 
 		// ---- MinecraftForge ----
 		log.accept("");
-		log.accept("== MinecraftForge " + Pins.FORGE + " ==");
-		ForgeArtifacts fa = new ForgeArtifacts(mcVersion, Pins.FORGE);
+		log.accept("== MinecraftForge " + pins.forge() + " ==");
+		ForgeArtifacts fa = new ForgeArtifacts(mcVersion, pins.forge());
 		Path forgeUserdev = dl.resolve("forge-userdev.jar");
 		http.ensureWithFallback(fa.forgeUrl(fa.userdevCoordinate()), fa.centralUrl(fa.userdevCoordinate()),
 				forgeUserdev);
@@ -105,21 +106,38 @@ final class ArtifactBuilder {
 				.build(forgeUserdev, forgeCfg, forgeRuntime.file);
 
 		// ---- NeoForge ----
-		log.accept("");
-		log.accept("== NeoForge " + Pins.NEOFORGE + " ==");
-		NeoForgeArtifacts nfa = new NeoForgeArtifacts(mcVersion, Pins.NEOFORGE);
-		Path neoUserdev = dl.resolve("neoforge-userdev.jar");
-		http.ensureWithFallback(nfa.neoforgedUrl(nfa.userdevCoordinate()), nfa.centralUrl(nfa.userdevCoordinate()),
-				neoUserdev);
-		// The same NeoForm userdev config shape on both sides, so the Forge reader serves; see NeoForgeArtifacts.
-		ForgeArtifacts.UserdevConfig neoCfg = ForgeArtifacts.readConfig(neoUserdev);
+		// 1.21.1 has no NeoForge (the fork happened at 1.20.5), so that generation stops after the Forge half and
+		// merges vanilla+Forge alone. Building a 26.2-shaped NeoForge carrier for it would be a carrier for the
+		// wrong Minecraft, so this is a hard stop, not a fallback.
+		boolean hasNeoForge = pins.hasNeoForge();
+		ArtifactResult neoRuntime = null;
+		ArtifactResult neoPatched = null;
+		if (hasNeoForge) {
+			log.accept("");
+			log.accept("== NeoForge " + pins.neoforge() + " ==");
+			NeoForgeArtifacts nfa = new NeoForgeArtifacts(mcVersion, pins.neoforge());
+			Path neoUserdev = dl.resolve("neoforge-userdev.jar");
+			http.ensureWithFallback(nfa.neoforgedUrl(nfa.userdevCoordinate()), nfa.centralUrl(nfa.userdevCoordinate()),
+					neoUserdev);
+			// The same NeoForm userdev config shape on both sides, so the Forge reader serves; see NeoForgeArtifacts.
+			ForgeArtifacts.UserdevConfig neoCfg = ForgeArtifacts.readConfig(neoUserdev);
 
-		ArtifactResult neoRuntime = new NeoForgeRuntimeBuilder(nfa, http, build,
-				out.resolve("neoforge-runtime.jar"), log).build(neoCfg);
-		ArtifactResult neoPatched = new NfrtRunner(http, tools, build.resolve("nfrt"),
-				build.resolve("nfrt-work"), log)
-				.run(jvm, mcDir, out.resolve("patched-mc-neoforge-" + mcVersion + ".jar"),
-						nfa.patchedMcCoordinate(), mcVersion, build.resolve("dl").resolve("server.jar"));
+			neoRuntime = new NeoForgeRuntimeBuilder(nfa, http, build,
+					out.resolve("neoforge-runtime.jar"), log).build(neoCfg);
+			neoPatched = new NfrtRunner(http, tools, build.resolve("nfrt"),
+					build.resolve("nfrt-work"), log)
+					.run(jvm, mcDir, out.resolve("patched-mc-neoforge-" + mcVersion + ".jar"),
+							nfa.patchedMcCoordinate(), mcVersion, build.resolve("dl").resolve("server.jar"));
+		} else {
+			log.accept("");
+			log.accept("== NeoForge: none for Minecraft " + mcVersion + " (NeoForge forked from Forge at 1.20.5) ==");
+			log.accept("   This generation therefore needs a TWO-carrier merged base (vanilla + MinecraftForge),");
+			log.accept("   which the byte-merger does not implement yet: it merges vanilla + Forge + NeoForge and");
+			log.accept("   resolves method-body conflicts BETWEEN the two loaders. See the multi-version plan.");
+			throw new IOException("Minecraft " + mcVersion + " has no NeoForge, so Forbric needs a two-carrier "
+					+ "merged base for it; that merge mode is not implemented yet. "
+					+ "Use --mc 26.2, 1.21.8, or wait for the two-carrier merge.");
+		}
 
 		// ---- the merge, and the interop patch the merge makes necessary ----
 		log.accept("");
@@ -129,9 +147,9 @@ final class ArtifactBuilder {
 				forgeRuntime.file, neoRuntime.file,
 				out.resolve("patched-mc-merged-" + mcVersion + ".jar"),
 				out.resolve("merge-conflicts.txt"),
-				MERGED + ":" + mcVersion);
+				MERGED + ":" + mcVersion, mcVersion);
 		ArtifactResult interop = merge.interop(jvm, forgeRuntime.file,
-				out.resolve("forge-runtime-interop.jar"), FORGE_RUNTIME + ":" + mcVersion);
+				out.resolve("forge-runtime-interop.jar"), FORGE_RUNTIME + ":" + mcVersion, mcVersion);
 		// After the interop patch, not before: the check resolves against what actually gets staged.
 		merge.linkCheck(jvm, merged.file, neoRuntime.file, interop.file);
 

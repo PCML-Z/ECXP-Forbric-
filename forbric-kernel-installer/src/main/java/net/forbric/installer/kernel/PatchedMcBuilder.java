@@ -69,7 +69,7 @@ final class PatchedMcBuilder {
 
 	ArtifactResult build(Path userdevJar, ForgeArtifacts.UserdevConfig cfg, Path forgeRuntimeJar) throws IOException {
 		String coordinate = fa.patchedMcCoordinate();
-		if (BuildStamp.isFresh(outJar)) {
+		if (BuildStamp.isFresh(outJar, fa.mcVersion)) {
 			log.accept("[patched] up-to-date: " + outJar.getFileName());
 			return new ArtifactResult(coordinate, outJar, Util.sha1(outJar), Files.size(outJar));
 		}
@@ -140,7 +140,7 @@ final class PatchedMcBuilder {
 		String sha1 = Util.sha1(outJar);
 		long size = Files.size(outJar);
 		log.accept("[patched] wrote " + outJar.getFileName() + " (" + (size / (1024 * 1024)) + " MB)");
-		BuildStamp.write(outJar);
+		BuildStamp.write(outJar, fa.mcVersion);
 		return new ArtifactResult(coordinate, outJar, sha1, size);
 	}
 

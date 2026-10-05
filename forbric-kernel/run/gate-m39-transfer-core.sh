@@ -4,7 +4,7 @@
 # GATE-PARALLEL: mem=2000
 set -euo pipefail
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
-MERGED="${MERGED:-$RUN_OLD/merged-base/patched-mc-merged-26.2.jar}"
+MERGED="${MERGED:-$RUN_OLD/merged-base/patched-mc-merged-$MC_VER.jar}"
 FORGE_RT="${FORGE_RT:-$RUN_OLD/merged-base/forge-runtime-interop.jar}"
 NEO_RT="${NEO_RT:-$RUN_OLD/neoforge-runtime/neoforge-runtime.jar}"
 export MERGED FORGE_RT NEO_RT

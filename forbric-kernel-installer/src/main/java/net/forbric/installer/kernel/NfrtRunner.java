@@ -88,16 +88,17 @@ final class NfrtRunner {
 	 */
 	ArtifactResult run(JdkLocator.Jvm jvm, Path mcDir, Path outJar, String coordinate, String mcVersion,
 			Path serverJar) throws IOException {
-		if (BuildStamp.isFresh(outJar)) {
+		if (BuildStamp.isFresh(outJar, mcVersion)) {
 			log.accept("[neoform] up-to-date: " + outJar.getFileName());
 			return new ArtifactResult(coordinate, outJar, Util.sha1(outJar), Files.size(outJar));
 		}
+		Pins.PinSet pins = Pins.forVersion(mcVersion);
 		Files.createDirectories(outJar.getParent());
 		Files.createDirectories(nfrtHome);
 		Files.createDirectories(workDir);
 		seedArtifacts(mcDir, mcVersion, serverJar);
 
-		Path tool = fetchTool();
+		Path tool = fetchTool(pins);
 
 		List<String> cmd = new ArrayList<>(List.of(
 				jvm.javaBin().toString(), HEAP,
@@ -108,14 +109,14 @@ final class NfrtRunner {
 				"run",
 				// The bare net.neoforged:neoforge:<v> coordinate does not exist on the Maven; without the
 				// classifier NFRT's ArtifactManager reports "Could not find ... in any repository".
-				"--neoforge", Pins.neoforgeUserdevCoordinate(),
+				"--neoforge", pins.neoforgeUserdevCoordinate(),
 				"--dist", "joined",
 				// NFRT runs cache maintenance on startup and will happily prune a shared cache; this build owns
 				// its own cache directory and has nothing to maintain.
 				"--disable-cache-maintenance",
-				"--write-result=" + Pins.NFRT_RESULT + ":" + outJar));
+				"--write-result=" + pins.nfrtResult() + ":" + outJar));
 
-		log.accept("[neoform] building NeoForge's patched Minecraft (" + Pins.NFRT_RESULT + ") …");
+		log.accept("[neoform] building NeoForge's patched Minecraft (" + pins.nfrtResult() + ") …");
 		List<String> tail = runAndCapture(cmd);
 
 		if (!Files.isRegularFile(outJar) || Files.size(outJar) == 0) {
@@ -132,17 +133,16 @@ final class NfrtRunner {
 				.filter(n -> n.startsWith("net/neoforged/"))
 				.count();
 		if (neoforgeEntries > 0) {
-			throw new IOException("NeoFormRuntime's " + Pins.NFRT_RESULT + " carries " + neoforgeEntries
+			throw new IOException("NeoFormRuntime's " + pins.nfrtResult() + " carries " + neoforgeEntries
 					+ " net/neoforged/ entries; it must carry none (wrong result id?)");
 		}
 
 		long size = Files.size(outJar);
 		log.accept("[neoform] wrote " + outJar.getFileName() + " (" + (size / (1024 * 1024)) + " MB)");
-		BuildStamp.write(outJar);
+		BuildStamp.write(outJar, mcVersion);
 		return new ArtifactResult(coordinate, outJar, Util.sha1(outJar), size);
 	}
 
-	/** NeoFormRuntime's own fat jar, cached beside the other tools. */
 	/**
 	 * Hands NFRT the two Minecraft jars this install already has, instead of letting it fetch them again.
 	 *
@@ -180,8 +180,9 @@ final class NfrtRunner {
 		}
 	}
 
-	private Path fetchTool() throws IOException {
-		String coordinate = Pins.nfrtCoordinate();
+	/** NeoFormRuntime's own fat jar, cached beside the other tools. */
+	private Path fetchTool(Pins.PinSet pins) throws IOException {
+		String coordinate = pins.nfrtCoordinate();
 		String rel = Util.coordinateToPath(coordinate);
 		Path dest = toolsDir.resolve(rel.substring(rel.lastIndexOf('/') + 1));
 		Files.createDirectories(toolsDir);

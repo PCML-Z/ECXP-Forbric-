@@ -51,14 +51,18 @@ final class BuildStamp {
 	}
 
 	/**
-	 * The key an artifact is stamped with: the pins, plus a digest of the merge tools that ride in this installer.
+	 * The key an artifact is stamped with: the pins <em>for the Minecraft version being built</em>, plus a digest
+	 * of the merge tools that ride in this installer.
+	 *
+	 * <p>Because the stamp folds in the Minecraft version, two generations can never share a cache entry even when
+	 * they write to the same file name — the version is part of the key, not just of the path.
 	 *
 	 * <p>The tools are not a pin and they change without one — the merge tool's lambda-realignment pass changed no
 	 * version at all and changed every merged class it fixed. Keying only on pins would have served the old merged
 	 * base out of the cache to exactly the people who needed the new one.
 	 */
-	private static String key() {
-		return Pins.stamp() + " tools=" + toolsDigest();
+	private static String key(String mcVersion) {
+		return Pins.forVersion(mcVersion).stamp() + " tools=" + toolsDigest();
 	}
 
 	private static volatile String toolsDigest;
@@ -93,27 +97,27 @@ final class BuildStamp {
 		return artifact.resolveSibling(artifact.getFileName() + ".pins");
 	}
 
-	/** True when {@code artifact} exists, is non-empty, and was built from today's pins. */
-	static boolean isFresh(Path artifact) {
+	/** True when {@code artifact} exists, is non-empty, and was built from {@code mcVersion}'s pins. */
+	static boolean isFresh(Path artifact, String mcVersion) {
 		try {
 			if (!Files.isRegularFile(artifact) || Files.size(artifact) == 0) return false;
 			Path stamp = stampFile(artifact);
 			if (!Files.isRegularFile(stamp)) return false;
-			return key().equals(Files.readString(stamp, StandardCharsets.UTF_8).trim());
+			return key(mcVersion).equals(Files.readString(stamp, StandardCharsets.UTF_8).trim());
 		} catch (IOException unreadable) {
 			return false;
 		}
 	}
 
 	/**
-	 * Records today's pins beside {@code artifact}. Written only after the artifact itself is in place, so an
-	 * interrupted build leaves no stamp and the next run rebuilds.
+	 * Records {@code mcVersion}'s pins beside {@code artifact}. Written only after the artifact itself is in place,
+	 * so an interrupted build leaves no stamp and the next run rebuilds.
 	 *
 	 * <p>Best-effort: a stamp that cannot be written costs a rebuild next time, which is the safe direction.
 	 */
-	static void write(Path artifact) {
+	static void write(Path artifact, String mcVersion) {
 		try {
-			Files.writeString(stampFile(artifact), key() + System.lineSeparator(), StandardCharsets.UTF_8);
+			Files.writeString(stampFile(artifact), key(mcVersion) + System.lineSeparator(), StandardCharsets.UTF_8);
 		} catch (IOException ignored) {
 			// Nothing to do: an unstamped artifact is treated as stale, which is correct, just slower.
 		}
