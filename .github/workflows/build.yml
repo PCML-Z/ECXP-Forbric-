@@ -156,7 +156,16 @@ jobs:
             start=$(date +%s)
             if bash "run/gate-$gate.sh" > "build/gate-$gate.out" 2>&1; then verdict=GREEN; else verdict=RED; failed=1; fi
             echo "gate-$gate $verdict in $(( $(date +%s) - start ))s" | tee -a build/gates-prepared.txt
-            [ "$verdict" = GREEN ] || tail -80 "build/gate-$gate.out"
+            [ "$verdict" = GREEN ] || {
+              tail -80 "build/gate-$gate.out"
+              # gate-$gate.out holds only the assertion that failed. What explains it is the driver's log, which
+              # the gate writes under build/verification and nothing uploads -- without these lines a RED gate is
+              # a message saying "inspect the driver log" with no driver log to inspect.
+              find build/verification -name '*.log' 2>/dev/null | sort | while read -r log; do
+                echo "--- $log"
+                tail -40 "$log"
+              done
+            }
           done
           { echo '### Server gates on the prepared files'; echo; sed 's/^/- /' build/gates-prepared.txt; } >> "$GITHUB_STEP_SUMMARY"
           exit "$failed"
