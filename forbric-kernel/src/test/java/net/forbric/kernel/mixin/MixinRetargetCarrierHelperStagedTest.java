@@ -49,16 +49,19 @@ class MixinRetargetCarrierHelperStagedTest {
 		assertEquals(MixinFit.Verdict.PARTIAL, before.verdict(), "premise: " + before.unresolved());
 
 		MixinRetarget.Plan plan = MixinRetarget.plan(MixinFit.parse(mixin), resolver);
-		assertEquals(1, plan.rewrites().size(), plan.describe());
-		assertEquals("bettermounthud$alwaysRenderFood", plan.rewrites().get(0).handler());
-		assertEquals("extractPlayerHealth", plan.rewrites().get(0).from());
-		assertEquals("extractFoodLevel" + G, plan.rewrites().get(0).to());
-		// What still does not run is the other hook, the XP redirect in Hud.extractHotbarAndDecorations, which nothing in
-		// the merged game calls; the food redirect's own anchors all resolve in live code.
+		assertEquals(2, plan.rewrites().size(), plan.describe());
+		MixinRetarget.Rewrite food = plan.rewrites().stream()
+				.filter(r -> r.handler().equals("bettermounthud$alwaysRenderFood")).findFirst().orElseThrow();
+		assertEquals("extractPlayerHealth", food.from());
+		assertEquals("extractFoodLevel" + G, food.to());
+		MixinRetarget.Rewrite xp = plan.rewrites().stream()
+				.filter(r -> r.handler().equals("bettermounthud$renderExperienceLevel")).findFirst().orElseThrow();
+		assertEquals("extractHotbarAndDecorations", xp.from());
+		assertEquals("extractExperienceLevel(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
+				xp.to());
+		// The XP redirect followed hasExperience into the layer registerVanillaLayers actually registers.
 		MixinFit.Result after = MixinFit.evaluate(MixinRetarget.rewritten(mixin, plan), resolver);
-		assertEquals(MixinFit.Verdict.PARTIAL, after.verdict(), "after: " + after.unresolved());
-		assertEquals(1, after.unresolved().size(), "after: " + after.unresolved());
-		assertTrue(after.unresolved().get(0).startsWith("@Inject target Hud.extractHotbarAndDecorations never runs"), "after: " + after.unresolved());
+		assertEquals(MixinFit.Verdict.FIT, after.verdict(), "after: " + after.unresolved());
 		System.setProperty(MixinFit.LIVENESS_PROPERTY, "off");
 		try {
 			MixinFit.Result bound = MixinFit.evaluate(MixinRetarget.rewritten(mixin, plan), resolver);

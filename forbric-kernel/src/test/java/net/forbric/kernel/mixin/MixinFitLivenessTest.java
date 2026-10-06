@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
@@ -33,7 +34,9 @@ class MixinFitLivenessTest {
 	@AfterEach
 	void reset() {
 		System.clearProperty(MixinFit.LIVENESS_PROPERTY);
+		System.clearProperty(MixinRetarget.ORPHANED_PIECE_PROPERTY);
 		MixinStubRebind.forget();
+		MixinRetarget.reset();
 		MergedBaseUncalledMethods.forgetGuests();
 	}
 
@@ -101,6 +104,85 @@ class MixinFitLivenessTest {
 		assertEquals(MixinFit.Verdict.PARTIAL, MixinFit.evaluate(redirect(HUD, HOTBAR, HAS_EXPERIENCE), resolver(Map.of(HUD, hud(false)))).verdict());
 	}
 
+	/**
+	 * The experience redirect follows {@code hasExperience} into {@code extractExperienceLevel}, the method the HUD
+	 * layer actually calls. The copy in {@code extractHotbarAndDecorations} stays uncalled.
+	 */
+	@Test
+	void theExperienceRedirectFollowsTheLiveLayer() {
+		MixinStubRebind.noteEcosystem(MIXIN, Ecosystem.FABRIC);
+		byte[] mixin = redirect(HUD, HOTBAR, HAS_EXPERIENCE);
+		Function<String, byte[]> resolved = resolver(Map.of(HUD, hudWithExperienceLayer(true)));
+		MixinFit.Result before = MixinFit.evaluate(mixin, resolved);
+		assertEquals(MixinFit.Verdict.PARTIAL, before.verdict(), before.unresolved().toString());
+		MixinRetarget.Adoption adoption = MixinRetarget.adopt(mixin, before, resolved, b -> MixinFit.evaluate(b, resolved));
+		assertTrue(adoption != null, "the reviewed piece should be taken");
+		assertEquals(1, adoption.plan().rewrites().size(), adoption.plan().describe());
+		assertEquals("extractExperienceLevel" + G, adoption.plan().rewrites().get(0).to());
+		assertEquals(MixinFit.Verdict.FIT, adoption.after().verdict(), adoption.after().unresolved().toString());
+	}
+
+	/** Nothing calls the live method either, so the redirect is not moved onto another method that never runs. */
+	@Test
+	void anUnreferencedPieceIsLeftAlone() {
+		MixinStubRebind.noteEcosystem(MIXIN, Ecosystem.FABRIC);
+		byte[] mixin = redirect(HUD, HOTBAR, HAS_EXPERIENCE);
+		Function<String, byte[]> resolved = resolver(Map.of(HUD, hudWithExperienceLayer(false)));
+		MixinRetarget.Plan plan = MixinRetarget.plan(MixinFit.parse(mixin), resolved);
+		assertEquals(0, plan.rewrites().size(), plan.describe());
+	}
+
+	/** The old method running again means the redirect already fires; it stays where the mod put it. */
+	@Test
+	void aCallerOfTheOldMethodKeepsTheRedirectThere() {
+		MixinStubRebind.noteEcosystem(MIXIN, Ecosystem.FABRIC);
+		byte[] hud = hudWithExperienceLayer(true);
+		// extractRenderState calls the old method, which the shipped row then reads as live.
+		ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+		new org.objectweb.asm.ClassReader(hud).accept(new org.objectweb.asm.ClassVisitor(Opcodes.ASM9, cw) {
+			@Override
+			public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+				MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+				if (!"extractRenderState".equals(name)) return mv;
+				return new MethodVisitor(Opcodes.ASM9, mv) {
+					@Override
+					public void visitInsn(int opcode) {
+						if (opcode == Opcodes.RETURN) {
+							super.visitVarInsn(Opcodes.ALOAD, 0);
+							super.visitVarInsn(Opcodes.ALOAD, 1);
+							super.visitVarInsn(Opcodes.ALOAD, 2);
+							super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, HUD, HOTBAR, G, false);
+						}
+						super.visitInsn(opcode);
+					}
+				};
+			}
+		}, 0);
+		Function<String, byte[]> resolved = resolver(Map.of(HUD, cw.toByteArray()));
+		assertEquals(MixinFit.Verdict.FIT, MixinFit.evaluate(redirect(HUD, HOTBAR, HAS_EXPERIENCE), resolved).verdict());
+		assertEquals(0, MixinRetarget.plan(MixinFit.parse(redirect(HUD, HOTBAR, HAS_EXPERIENCE)), resolved).rewrites().size());
+	}
+
+	@Test
+	void thePieceMoveCanBeSwitchedOff() {
+		System.setProperty(MixinRetarget.ORPHANED_PIECE_PROPERTY, "off");
+		MixinStubRebind.noteEcosystem(MIXIN, Ecosystem.FABRIC);
+		byte[] mixin = redirect(HUD, HOTBAR, HAS_EXPERIENCE);
+		Function<String, byte[]> resolved = resolver(Map.of(HUD, hudWithExperienceLayer(true)));
+		assertEquals(0, MixinRetarget.plan(MixinFit.parse(mixin), resolved).rewrites().size());
+		assertEquals(null, MixinRetarget.adopt(mixin, MixinFit.evaluate(mixin, resolved), resolved,
+				b -> MixinFit.evaluate(b, resolved)));
+	}
+
+	/** A NeoForge mod was compiled against the layer. The row is for the games that still name the old method. */
+	@Test
+	void aNeoForgeModIsNotMovedOntoThePiece() {
+		MixinStubRebind.noteEcosystem(MIXIN, Ecosystem.NEOFORGE);
+		byte[] mixin = redirect(HUD, HOTBAR, HAS_EXPERIENCE);
+		Function<String, byte[]> resolved = resolver(Map.of(HUD, hudWithExperienceLayer(true)));
+		assertEquals(0, MixinRetarget.plan(MixinFit.parse(mixin), resolved).rewrites().size());
+	}
+
 	/** A listed caller in another class is read through the resolver: vanilla's fluid renderer asking the fluid's tint. */
 	@Test
 	void aListedCallerInAnotherClassIsReadThroughTheResolver() {
@@ -156,6 +238,41 @@ class MixinFitLivenessTest {
 		render.visitEnd();
 		cw.visitEnd();
 		return cw.toByteArray();
+	}
+
+	/** The dead copy, the live experience-level method, and — when asked — a layer registration that handles the live one. */
+	private static byte[] hudWithExperienceLayer(boolean referenced) {
+		ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+		cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, HUD, null, "java/lang/Object", null);
+		experienceGate(cw, HOTBAR);
+		experienceGate(cw, "extractExperienceLevel");
+		MethodVisitor render = cw.visitMethod(Opcodes.ACC_PUBLIC, "extractRenderState", G, null, null);
+		render.visitCode();
+		render.visitInsn(Opcodes.RETURN);
+		render.visitMaxs(0, 0);
+		render.visitEnd();
+		MethodVisitor layers = cw.visitMethod(Opcodes.ACC_PRIVATE, "registerVanillaLayers", "()V", null, null);
+		layers.visitCode();
+		if (referenced) {
+			layers.visitLdcInsn(new Handle(Opcodes.H_INVOKEVIRTUAL, HUD, "extractExperienceLevel", G, false));
+			layers.visitInsn(Opcodes.POP);
+		}
+		layers.visitInsn(Opcodes.RETURN);
+		layers.visitMaxs(0, 0);
+		layers.visitEnd();
+		cw.visitEnd();
+		return cw.toByteArray();
+	}
+
+	private static void experienceGate(ClassWriter cw, String name) {
+		MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PRIVATE, name, G, null, null);
+		mv.visitCode();
+		mv.visitInsn(Opcodes.ACONST_NULL);
+		mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/minecraft/client/multiplayer/MultiPlayerGameMode", "hasExperience", "()Z", false);
+		mv.visitInsn(Opcodes.POP);
+		mv.visitInsn(Opcodes.RETURN);
+		mv.visitMaxs(0, 0);
+		mv.visitEnd();
 	}
 
 	/** A class with one method, which calls {@code calleeOwner.callee} when one is given. */

@@ -34,8 +34,10 @@ import net.forbric.kernel.util.ForbricLog;
  * <p>Better Mount HUD redirects {@code MultiPlayerGameMode.hasExperience()} inside {@code Hud.extractHotbarAndDecorations}
  * to hide the XP number over the jump bar. The merged base still has that method, with that call in it, so the anchor
  * resolves and the redirect attaches — but vanilla calls the method from {@code Hud.extractRenderState}, NeoForge's HUD
- * layers replaced that call, and no class in the merged jar, the carriers or the kernel calls it any more. The redirect
- * never runs; resolution alone called it FIT.
+ * layers replaced that call, and no class in the merged jar, the carriers or the kernel calls it any more. The same gate
+ * now lives in {@code Hud.extractExperienceLevel}, which {@code registerVanillaLayers} registers, and
+ * {@link MixinRetarget} follows that one reviewed call there. Any other injector left on the uncalled method still never
+ * runs; resolution alone called it FIT.
  *
  * <p>A row says: {@code owner#method} is declared in the merged base; no instruction or method handle in the merged jar,
  * {@code forge-runtime-interop.jar}, {@code neoforge-runtime.jar} or the kernel's own classes names its name and

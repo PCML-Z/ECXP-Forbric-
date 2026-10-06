@@ -79,7 +79,9 @@ class MixinFitLivenessCensusStagedTest {
 
 	/**
 	 * What changes, as {@code config:mixin verdict-off -> verdict-on}, pinned; each was read against the merged bytes. A
-	 * PARTIAL that stays PARTIAL gained a "never runs" line. Five methods carry all of the FIT → PARTIAL moves:
+	 * PARTIAL that stays PARTIAL gained a "never runs" line. Better Mount HUD is FIT → FIT: liveness off already
+	 * reads its XP redirect as bound, and liveness on follows that call into {@code Hud.extractExperienceLevel}, so
+	 * the verdicts match and the plans do not. Five methods carry the FIT → PARTIAL moves:
 	 * {@code Hud.extractHotbarAndDecorations} (NeoForge's HUD layers replaced its one caller), {@code LiquidBlock
 	 * .shouldSpreadLiquid} (both carriers' {@code FluidInteractionRegistry.canInteract} replaced it), {@code AxeItem
 	 * .getStripped} ({@code getToolModifiedState}), {@code LivingEntity.trapdoorUsableAsLadder} ({@code CommonHooks
@@ -95,7 +97,7 @@ class MixinFitLivenessCensusStagedTest {
 			"apoli.mixins.json:legacy.hud_power.HudMixin FIT -> PARTIAL",
 			"architectury.mixins.json:MixinServerExplosion PARTIAL -> PARTIAL",
 			"balm.fabric.mixins.json:FabricCropBlockMixin PARTIAL -> PARTIAL",
-			"bettermounthud.mixins.json:HudMixin FIT -> PARTIAL",
+			"bettermounthud.mixins.json:HudMixin FIT -> FIT",
 			"configapi-fabric.mixins.json:event.ServerExplosionMixin PARTIAL -> PARTIAL",
 			"fabric-block-api-v1.mixins.json:LivingEntityMixin FIT -> PARTIAL",
 			"fabric-renderer-api-v1.mixins.json:block.particle.ScreenEffectRendererMixin FIT -> PARTIAL",

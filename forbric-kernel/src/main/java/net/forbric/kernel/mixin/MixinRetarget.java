@@ -110,6 +110,11 @@ public final class MixinRetarget {
 	 */
 	static final String REPLACED_CALL_PROPERTY = "forbric.mixinRetarget.replacedCall";
 	/**
+	 * {@code -Dforbric.mixinRetarget.orphanedPiece=off}: a redirect stays on a vanilla method nothing calls, even when a
+	 * reviewed row names the live method that now makes the same call.
+	 */
+	static final String ORPHANED_PIECE_PROPERTY = "forbric.mixinRetarget.orphanedPiece";
+	/**
 	 * The suffix an R7-moved handler's own body moves to, under the method that reads its arguments off the replacement's,
 	 * before the mixin's mark ({@link MixinHandlerShim#asideName}).
 	 */
@@ -192,8 +197,12 @@ public final class MixinRetarget {
 				}
 				own.addAll(swappedCallees(handler, injector, selectors, target, resolver));
 				own.addAll(renamedBodies(mixin, oneTarget, handler, injector, selectors, target, resolver, true));
-				// The selector moves when the method is a stub, a rename or a split; the point moves only when the method
-				// keeps a body of its own and the call went one level down. Never both for one handler.
+				// The selector moves when the method is a stub, a rename, a split, or a reviewed copy of a method
+				// nothing calls. The point moves only when the method keeps a body of its own and the call went one
+				// level down. Never both for one handler.
+				if (oneTarget && own.stream().noneMatch(r -> r.element() == Element.SELECTOR)) {
+					own.addAll(orphanedPieces(mixin, handler, injector, selectors, target, resolver));
+				}
 				if (oneTarget && own.stream().noneMatch(r -> r.element() == Element.SELECTOR)) {
 					own.addAll(movedCalls(mixin.name, handler, injector, selectors, target, resolver));
 				}
@@ -730,6 +739,78 @@ public final class MixinRetarget {
 		}
 		int own = MixinStubRebind.intrinsicArity(injector, params, end, body);
 		return own < 0 || own < end;
+	}
+
+	/**
+	 * A call a carrier copied into a new method and left behind in a method nothing calls any more.
+	 *
+	 * <p>The carrier-helper census cannot see this: it only records a call the merged method <em>stopped</em> making.
+	 * {@code Hud.extractHotbarAndDecorations} still gates {@code ContextualBar.extractExperienceLevel} on
+	 * {@code MultiPlayerGameMode.hasExperience}, and so does {@code Hud.extractExperienceLevel}, the private method
+	 * {@code registerVanillaLayers} registers as the experience-level layer. Better Mount HUD's {@code @Redirect} of
+	 * that call stays in the copy nothing runs, so the XP number never hides while the jump bar is up.
+	 *
+	 * <p>One reviewed row, re-checked on the live bytes: the selected method is the uncalled one for this mod's
+	 * ecosystem, the handler depends on nothing but the redirected call ({@link #movableWhole}), that call is the
+	 * injector's only resolvable anchor and occurs once in the named live method, and something in the class still
+	 * calls that method. A live caller of the old method declines — the redirect already runs. NeoForge mods were
+	 * compiled against the layer and are not in the row.
+	 */
+	private record OrphanedPiece(String owner, String method, String piece, String member, Set<net.forbric.api.Ecosystem> ecosystems) {
+	}
+
+	private static final List<OrphanedPiece> ORPHANED_PIECES = List.of(new OrphanedPiece(
+			"net/minecraft/client/gui/Hud",
+			"extractHotbarAndDecorations(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
+			"extractExperienceLevel(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
+			"Lnet/minecraft/client/multiplayer/MultiPlayerGameMode;hasExperience()Z",
+			Set.of(net.forbric.api.Ecosystem.FABRIC, net.forbric.api.Ecosystem.FORGE)));
+
+	private static List<Rewrite> orphanedPieces(ClassNode mixin, MethodNode handler, AnnotationNode injector,
+			List<String> selectors, ClassNode target, Function<String, byte[]> resolver) {
+		if ("off".equalsIgnoreCase(System.getProperty(ORPHANED_PIECE_PROPERTY, "on"))) return List.of();
+		net.forbric.api.Ecosystem ecosystem = MixinStubRebind.ecosystemOf(mixin.name);
+		if (ecosystem == null || !movableWhole(handler, injector, false, false)) return List.of();
+		List<AnnotationNode> ats = MixinFit.atNodes(injector);
+		List<String> wanted = resolvableMembers(ats);
+		if (wanted.size() != 1) return List.of();
+		for (AnnotationNode at : ats) {
+			if (MixinFit.value(at, "ordinal") instanceof Integer ordinal && ordinal != 0) return List.of();
+		}
+		List<Rewrite> out = new ArrayList<>();
+		for (String selector : selectors) {
+			List<MethodNode> named = resolveSelector(target, selector, resolver);
+			List<MethodNode> ownMethods = named.stream().filter(target.methods::contains).toList();
+			if (!ownMethods.isEmpty()) named = ownMethods;
+			if (named.size() != 1) continue;
+			MethodNode selected = named.get(0);
+			OrphanedPiece row = null;
+			for (OrphanedPiece candidate : ORPHANED_PIECES) {
+				if (candidate.owner().equals(target.name) && candidate.method().equals(selected.name + selected.desc)
+						&& candidate.member().equals(wanted.get(0)) && candidate.ecosystems().contains(ecosystem)) {
+					row = candidate;
+				}
+			}
+			if (row == null) continue;
+			if (MergedBaseUncalledMethods.neverRuns(target, selected, ecosystem, resolver) == null) continue;
+			if (CarrierHelpers.occurrences(selected, row.member()) < 1) continue;
+			MethodNode piece = null;
+			int pieces = 0;
+			for (MethodNode candidate : target.methods) {
+				if (candidate == selected || !candidate.desc.equals(selected.desc)
+						|| (candidate.access & Opcodes.ACC_STATIC) != (selected.access & Opcodes.ACC_STATIC)) continue;
+				if (CarrierHelpers.occurrences(candidate, row.member()) != 1) continue;
+				if (!(candidate.name + candidate.desc).equals(row.piece())) continue;
+				piece = candidate;
+				pieces++;
+			}
+			if (pieces != 1 || piece == null) continue;
+			if (!MergedBaseUncalledMethods.calledIn(target, piece)) continue;
+			if (MergedBaseUncalledMethods.neverRuns(target, piece, ecosystem, resolver) != null) continue;
+			out.add(new Rewrite(handler.name, Element.SELECTOR, selector, piece.name + piece.desc,
+					"the call still runs in " + piece.name + ", and " + selected.name + " is a copy nothing calls"));
+		}
+		return out;
 	}
 
 	/**
