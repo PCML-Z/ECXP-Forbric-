@@ -94,6 +94,7 @@ test	net.forbric.kernel.mixin.MixinStubRebindTest	fusionsVerdictFindsTheAnchorWh
 test	net.forbric.kernel.mixin.MixinStubRebindTest	malilibsFormatRestoreMovesToTheBodyClientLanguageCalls()	[fixture:third-party] malilib absent from the merged pack
 test	net.forbric.kernel.mixin.MixinStubRebindTest	owosLangHooksMoveTogetherToTheBodyClientLanguageCalls()	[fixture:third-party] build/compat-inputs/sweep90/mods/owo-lib-0.13.1+26.2.jar absent
 test	net.forbric.kernel.mixin.MixinStubRebindTest	owosVerdictFollowsTheGroup()	[fixture:third-party] owo and the merged base required
+test	net.forbric.kernel.mixin.MixinStubRebindTest	theInstalledLanguageReloadRedirectForwardsTheComponentConsumer()	[fixture:third-party] language reload is not installed in the 26.2 instance
 test	net.forbric.kernel.mixin.MixinStubRebindTest	theSwitchMovesNothing()	[fixture:third-party] run/client-popular/mods/architectury-fabric-21.1.10.jar absent
 test	net.forbric.kernel.mixin.MixinStubRebindTest	theVerdictFollowsTheRebind()	[fixture:third-party] malilib absent from the merged pack
 test	net.forbric.kernel.mixin.MixinSubtypeOwnerRetargetTest	thePredicateCheckMovesToTheSameCallThroughCodec()	[fixture:third-party] lithostitched's Fabric jar required

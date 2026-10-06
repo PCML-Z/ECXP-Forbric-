@@ -302,10 +302,12 @@ test	net.forbric.kernel.mixin.MixinStubRebindTest	aDefaultForwardingToAnAbstract
 test	net.forbric.kernel.mixin.MixinStubRebindTest	aLambdaStubIsAStubButACapturingOneIsNot()	[fixture:staged] actual game required
 test	net.forbric.kernel.mixin.MixinStubRebindTest	aModifyVariableByNameMovesToTheBodyThatHasTheLocal()	[fixture:staged] actual game required
 test	net.forbric.kernel.mixin.MixinStubRebindTest	aModifyVariableIsLeftWhereNothingProvesTheLocal()	[fixture:staged] actual game required
+test	net.forbric.kernel.mixin.MixinStubRebindTest	aNeoForgeLoadRedirectStaysOnTheAppendFromStub()	[fixture:staged] actual game required
 test	net.forbric.kernel.mixin.MixinStubRebindTest	aNeoForgeModMovesOffAStubOnlyMinecraftForgeHas()	[fixture:staged] actual game required
 test	net.forbric.kernel.mixin.MixinStubRebindTest	aNeoForgeModsMixinIsLeftAsNeoForgeWouldHaveIt()	[fixture:third-party] run/client-popular/mods/architectury-fabric-21.1.10.jar absent
 test	net.forbric.kernel.mixin.MixinStubRebindTest	aPairVanillaAlreadyHasStaysWhereTheModPutIt()	[fixture:third-party] local merged mod pack: run/client-merged-pack/mods
 test	net.forbric.kernel.mixin.MixinStubRebindTest	aParameterAnnotationThatIsNotSugarDoesNotKeepTheInjectorOnTheStub()	[fixture:staged] actual game required
+test	net.forbric.kernel.mixin.MixinStubRebindTest	aReplacingRedirectOfAWidenedCallStaysOnTheStub()	[fixture:staged] actual game required
 test	net.forbric.kernel.mixin.MixinStubRebindTest	aReturnModifierCapturingTheStubsArgumentsStaysOnTheStub()	[fixture:staged] actual game required
 test	net.forbric.kernel.mixin.MixinStubRebindTest	aShareGroupMovesWholeOrNotAtAll()	[fixture:staged] actual game required
 test	net.forbric.kernel.mixin.MixinStubRebindTest	aShareGroupWithARedirectStays()	[fixture:staged] actual Fabric API fixture required
@@ -318,10 +320,12 @@ test	net.forbric.kernel.mixin.MixinStubRebindTest	fabricApisElytraCheckMovesWher
 test	net.forbric.kernel.mixin.MixinStubRebindTest	fusionsOverlayHookMovesWithTheOnlyModelDiscoveryInTheBody()	[fixture:staged] actual game required
 test	net.forbric.kernel.mixin.MixinStubRebindTest	fusionsSpriteCaptureMovesToTheBodyMinecraftForgeRan()	[fixture:third-party] build/compat-inputs/sweep90/mods/fusion-1.3.15a-forge-mc26.2.jar absent
 test	net.forbric.kernel.mixin.MixinStubRebindTest	fusionsVerdictFindsTheAnchorWhereTheRebindPutsIt()	[fixture:staged] fusion and the merged base required
+test	net.forbric.kernel.mixin.MixinStubRebindTest	languageReloadsLoadRedirectKeepsTheComponentConsumer()	[fixture:staged] actual game required
 test	net.forbric.kernel.mixin.MixinStubRebindTest	malilibsFormatRestoreMovesToTheBodyClientLanguageCalls()	[fixture:third-party] malilib absent from the merged pack
 test	net.forbric.kernel.mixin.MixinStubRebindTest	mixinFitJudgesThePinnedThenRebasedInjectorInTheBody()	[fixture:staged] actual game required
 test	net.forbric.kernel.mixin.MixinStubRebindTest	owosLangHooksMoveTogetherToTheBodyClientLanguageCalls()	[fixture:staged] actual game required
 test	net.forbric.kernel.mixin.MixinStubRebindTest	owosVerdictFollowsTheGroup()	[fixture:staged] owo and the merged base required
+test	net.forbric.kernel.mixin.MixinStubRebindTest	theInstalledLanguageReloadRedirectForwardsTheComponentConsumer()	[fixture:third-party] language reload is not installed in the 26.2 instance
 test	net.forbric.kernel.mixin.MixinStubRebindTest	theSwitchMovesNothing()	[fixture:third-party] run/client-popular/mods/architectury-fabric-21.1.10.jar absent
 test	net.forbric.kernel.mixin.MixinStubRebindTest	theVerdictFollowsTheRebind()	[fixture:third-party] malilib absent from the merged pack
 test	net.forbric.kernel.mixin.MixinSubtypeOwnerRetargetTest	codecDoesNotRedeclareParse()	[fixture:mc-libraries] Minecraft's DataFixerUpper required
@@ -1014,7 +1018,7 @@ test	net.forbric.kernel.transform.RegistryDirectoryOwnerInjectorTest	withoutFabr
 test	net.forbric.kernel.transform.RegistryDirectoryOwnerInjectorTest	woversRegistriesReadTheDirectoryWoverShipsAsOnNativeFabric()	[fixture:mc-libraries] ~/.minecraft/versions/26.2/26.2.jar absent — skipping real-bytes check
 test	net.forbric.kernel.transform.RegistryHookRedirectorTest	rewritesRealGameDataGetWrapperToIdentity()	[fixture:staged] staged forge-runtime.jar absent — skipping real-bytecode redirect check
 test	net.forbric.kernel.transform.RegistrySyncParityInjectorTest	theCaptureFieldTheContractReadsStillExists()	[fixture:staged] $ROOT/forbric-loader/run/forge-runtime/forge-runtime.jar absent (reading net/minecraftforge/registries/NamespacedWrapper$3.class)
-test	net.forbric.kernel.transform.RegistrySyncParityInjectorTest	theRealPendingTagsClassGainsAVerifiableContents()	[fixture:staged] $ROOT/forbric-loader/run/forge-runtime/forge-runtime.jar absent (reading net/minecraftforge/registries/NamespacedWrapper$3.class)
+test	net.forbric.kernel.transform.RegistrySyncParityInjectorTest	theRealPendingTagsClassAnswersThePendingTagsContract()	[fixture:staged] $ROOT/forbric-loader/run/forge-runtime/forge-runtime.jar absent (reading net/minecraftforge/registries/NamespacedWrapper$3.class)
 test	net.forbric.kernel.transform.RegistrySyncParityInjectorTest	theRealWrapperGainsBothEcosystemsRemapContracts()	[fixture:staged] $ROOT/forbric-loader/run/forge-runtime/forge-runtime.jar absent (reading net/minecraftforge/registries/NamespacedWrapper.class)
 test	net.forbric.kernel.transform.RegistrySyncParityInjectorTest	theThirdAnonymousClassIsStillTheOneImplementingPendingTags()	[fixture:staged] $ROOT/forbric-loader/run/forge-runtime/forge-runtime.jar absent (reading net/minecraftforge/registries/NamespacedWrapper$3.class)
 test	net.forbric.kernel.transform.RegistrySyncParityInjectorTest	withoutFabricApiTheRealWrapperGainsNeoForgesContractAndNoPublicMethodNamingFabricApi()	[fixture:staged] $ROOT/forbric-loader/run/forge-runtime/forge-runtime.jar absent (reading net/minecraftforge/registries/NamespacedWrapper.class)
