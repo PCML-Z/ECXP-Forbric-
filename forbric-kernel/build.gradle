@@ -9,9 +9,8 @@ base {
 
 version = '0.1.0-SNAPSHOT'
 
-// The Minecraft generation this tree is built against. 26.2 (Mojmap-native, identity namespace) is the default
-// and the one every gate currently runs. Override with -Pforbric.mcVersion=1.21.8 (or 1.21.1) to build the game
-// side against that generation's staged artifacts and version JSON.
+// The Minecraft generation this tree is built against. 26.2 (Mojmap-native, identity namespace) is the only
+// generation the installer ships. -Pforbric.mcVersion retargets compile inputs; it does not add a supported release.
 //
 // This only re-points where the build READS its compile-time inputs from (the merged base, the Fabric API build,
 // the staged version JSON). It does NOT by itself make the tree boot on that version: the game's Mojmap anchor
@@ -25,7 +24,8 @@ def fabricApiVersion = project.findProperty('forbric.fabricApiVersion') ?: '0.15
 java {
 	// The sovereign kernel raises the floor to Java 21 (records, pattern switch, sealed types). The game itself
 	// needs Java 25, but the boot-side kernel bytecode only needs 21; we pin release 21 so the build runs on any
-	// JDK >= 21 without a separate toolchain (this machine ships JDK 25).
+	// JDK >= 21. A Gradle JVM that cannot read the game's class files can still compile them by setting
+	// FORBRIC_JAVAC_HOME to a newer JDK; the forked javac keeps release 21.
 	sourceCompatibility = JavaVersion.VERSION_21
 	targetCompatibility = JavaVersion.VERSION_21
 }
@@ -285,6 +285,13 @@ dependencies {
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release = 21
+	// Gradle 9.1 cannot run on a JDK new enough to read Minecraft 26.2's class files (major 69). Point
+	// FORBRIC_JAVAC_HOME at that newer JDK and the forked javac still emits release 21.
+	def javacHome = System.getenv('FORBRIC_JAVAC_HOME')
+	if (javacHome) {
+		options.fork = true
+		options.forkOptions.javaHome = file(javacHome)
+	}
 }
 
 // The GAME-side set only compiles when the staged jars exist. Point developers at the pipeline otherwise.

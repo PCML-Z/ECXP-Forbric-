@@ -4,15 +4,11 @@ English | [简体中文](README.zh-CN.md)
 
 The PMCL team's enhanced build of [Forbric](https://github.com/Ray-T-r/Minecraft-Forbric-mod-loader). One game loads Fabric, Forge, and NeoForge mods together.
 
-Upstream Forbric currently covers Minecraft 26.2 only. This tree extends the installer pins to **26.2, 1.21.8, and 1.21.1**, and writes its own version id so it does not replace an installed Forbric profile.
+Upstream Forbric covers Minecraft 26.2. This build does too, and it writes its own version id so it does not replace an installed Forbric profile. 0.10 also pinned 1.21.8 and 1.21.1; 0.11 drops them because those anchors were never re-measured.
 
 | Minecraft | Version id | Status |
 | --- | --- | --- |
-| 26.2 | `26.2-ecxp-forbric` | Same kernel path as upstream; pins checked against the published bytes |
-| 1.21.8 | `1.21.8-ecxp-forbric` | Install coordinates checked; in-game anchors are still the 26.2 measurements |
-| 1.21.1 | `1.21.1-ecxp-forbric` | Same as 1.21.8 |
-
-An install that finishes on 1.21.x is not a claim that mods behave as they do on 26.2. See [the multi-version plan](docs/MULTIVERSION_PLAN.md).
+| 26.2 | `26.2-ecxp-forbric` | The only supported version. Pins checked against the published bytes |
 
 ## What is current
 
@@ -37,7 +33,7 @@ Once a release exists:
 java -jar forbric-kernel-installer-<version>.jar --dir <game directory> --mc 26.2 --release <tag>
 ```
 
-`--mc` is `26.2`, `1.21.8`, or `1.21.1`. With no arguments the window opens.
+`--mc` is `26.2`. With no arguments the window opens.
 
 Until this repository publishes a GitHub Release, build the installer jar yourself:
 

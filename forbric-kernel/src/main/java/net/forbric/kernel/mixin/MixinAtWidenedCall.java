@@ -17,6 +17,7 @@
 package net.forbric.kernel.mixin;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -27,7 +28,11 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FrameNode;
+import org.objectweb.asm.tree.IincInsnNode;
+import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.LocalVariableNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
@@ -106,6 +111,15 @@ import net.forbric.kernel.util.ForbricLog;
  * redirect stopped a strict launch that native Fabric runs. Only {@code @At(INVOKE)}, only when every widened call in
  * the selected bodies is an {@code invokestatic} of one widened descriptor, and only for a handler that takes the named
  * call's arguments first and returns its type. {@code -Dforbric.mixinAtWidenRedirect=off} leaves these where they are.
+ *
+ * <p>A handler that itself invokes the vanilla signature is a different case, and it does not need a reviewed row.
+ * Dropping the carrier's appended arguments there would drop the work those arguments do. The point moves, and each of
+ * the handler's own calls of the vanilla signature gains those arguments in place — Language Reload's
+ * {@code @Redirect} of {@code Language.loadFromJson(InputStream, BiConsumer)} calls that method, wrapping the string
+ * consumer when multilingual search is on, while the merged {@code ClientLanguage.appendFrom} passes a second consumer
+ * the component translations are stored through. The handler takes the longer call, then the target arguments it
+ * already captured. A handler that does not call the vanilla method still replaces the carrier's call outright, and
+ * stays on the reviewed rows above.
  *
  * <p>{@code -Dforbric.mixinAtWiden=off} leaves every injection point as compiled.
  */
@@ -335,8 +349,14 @@ public final class MixinAtWidenedCall {
 				List<String[]> moves = new ArrayList<>();
 				widened += widenOne(mixin.name, method, injector, injector, bodies, moves);
 				// A redirect's handler mirrors the call, so the call it now names needs a handler of that shape.
-				if (REDIRECT.equals(injector.desc) && moves.size() == 1) wrappers.add(redirectWrapper(mixin, method, injector,
-						moves.getFirst()[0], moves.getFirst()[1]));
+				// A reviewed row drops the carrier's appended arguments. A handler that calls the vanilla signature
+				// itself keeps them, threaded into that call.
+				if (REDIRECT.equals(injector.desc) && moves.size() == 1) {
+					String named = moves.getFirst()[0];
+					String movedTo = moves.getFirst()[1];
+					if (redirectable(movedTo) != null) wrappers.add(redirectWrapper(mixin, method, injector, named, movedTo));
+					else forwardAppendedArguments(method, named, movedTo);
+				}
 			}
 		}
 		mixin.methods.addAll(wrappers);
@@ -443,7 +463,9 @@ public final class MixinAtWidenedCall {
 			String moved = widenedAcross(bodies, target);
 			if (moved == null) return null;
 			if (REDIRECT.equals(injector.desc)) {
-				return "INVOKE".equals(atValue) && staticRedirect(handler, bodies, target, moved) ? moved : null;
+				if (!"INVOKE".equals(atValue)) return null;
+				if (staticRedirect(handler, bodies, target, moved)) return moved;
+				return forwardingRedirect(handler, bodies, target, moved) ? moved : null;
 			}
 			return blind || singleArgumentAtFixedIndex(handler, injector, target) ? moved : null;
 		}
@@ -474,6 +496,217 @@ public final class MixinAtWidenedCall {
 		if (params.length < wanted.length) return false;
 		for (int i = 0; i < wanted.length; i++) if (!params[i].equals(wanted[i])) return false;
 		return true;
+	}
+
+	/**
+	 * Whether {@link #widen} will retarget this point once the injector selects {@code bodies}. {@link MixinStubRebind}
+	 * asks this about the body it is about to select: the selector still names the stub, so {@link #wouldMove} — it
+	 * reads the selector — cannot see the call.
+	 */
+	static boolean willRetarget(MethodNode handler, AnnotationNode injector, MethodNode body, String atValue, String target) {
+		return body != null && willRetarget(handler, injector, List.of(body), atValue, target);
+	}
+
+	/** {@link #willRetarget(MethodNode, AnnotationNode, MethodNode, String, String)} for several bodies. */
+	static boolean willRetarget(MethodNode handler, AnnotationNode injector, List<MethodNode> bodies, String atValue, String target) {
+		if (!enabled() || handler == null || injector == null || bodies == null || bodies.isEmpty() || atValue == null || target == null) return false;
+		if (inGroup(handler)) return false;
+		if (!ARGUMENT_BLIND.contains(injector.desc) && !MODIFY_ARG.equals(injector.desc)
+				&& !(REDIRECT.equals(injector.desc) && redirectEnabled())) return false;
+		return decide(handler, injector, bodies, atValue, target) != null;
+	}
+
+	/**
+	 * How many arguments the handler was written for when {@code body} contains {@code target} only in widened form:
+	 * the named call's arguments, plus a receiver when the widened call is not {@code invokestatic}. {@code -1} when
+	 * that call is not one shape.
+	 */
+	static int namedArity(MethodNode body, String target) {
+		String wide = widenedIn(body, target);
+		Member own = parse(target);
+		Member call = wide == null ? null : parse(wide);
+		if (own == null || call == null || body.instructions == null) return -1;
+		Boolean statik = null;
+		for (AbstractInsnNode insn : body.instructions) {
+			if (!(insn instanceof MethodInsnNode site) || !site.owner.equals(call.owner()) || !site.name.equals(call.name())
+					|| !site.desc.equals(call.descriptor())) continue;
+			boolean isStatic = site.getOpcode() == Opcodes.INVOKESTATIC;
+			if (!isStatic && site.getOpcode() != Opcodes.INVOKEVIRTUAL && site.getOpcode() != Opcodes.INVOKESPECIAL
+					&& site.getOpcode() != Opcodes.INVOKEINTERFACE) return -1;
+			if (statik != null && statik != isStatic) return -1;
+			statik = isStatic;
+		}
+		if (statik == null) return -1;
+		return (statik ? 0 : 1) + Type.getArgumentTypes(own.descriptor()).length;
+	}
+
+	/**
+	 * A redirect whose handler invokes {@code named} and can take {@code moved}'s appended arguments on that invoke.
+	 * Reviewed rows stay on {@link #staticRedirect}: those handlers replace the call, and the wrapper drops the
+	 * appended arguments on purpose.
+	 */
+	private static boolean forwardingRedirect(MethodNode handler, List<MethodNode> bodies, String named, String moved) {
+		if (redirectable(moved) != null) return false;
+		Member call = parse(moved), own = parse(named);
+		if (call == null || own == null) return false;
+		if (!Type.getReturnType(handler.desc).equals(Type.getReturnType(own.descriptor()))) return false;
+		Type[] wanted = Type.getArgumentTypes(own.descriptor());
+		Type[] wide = Type.getArgumentTypes(call.descriptor());
+		if (wide.length <= wanted.length) return false;
+		Type[] params = Type.getArgumentTypes(handler.desc);
+		if (params.length < wanted.length) return false;
+		for (int i = 0; i < wanted.length; i++) if (!params[i].equals(wanted[i])) return false;
+		if (!everySiteStatic(bodies, call)) return false;
+		if (handler.instructions == null) return false;
+		int insertAt = parameterSlot(handler, wanted.length);
+		if (!framesAccept(handler, insertAt)) return false;
+		int calls = 0;
+		for (AbstractInsnNode insn : handler.instructions) {
+			if (!(insn instanceof MethodInsnNode site) || !site.owner.equals(own.owner()) || !site.name.equals(own.name())
+					|| !site.desc.equals(own.descriptor())) continue;
+			if (site.getOpcode() != Opcodes.INVOKESTATIC) return false;
+			calls++;
+		}
+		return calls > 0;
+	}
+
+	/** Every {@code call} in {@code bodies} is an {@code invokestatic}, and there is at least one. */
+	private static boolean everySiteStatic(List<MethodNode> bodies, Member call) {
+		int calls = 0;
+		for (MethodNode body : bodies) {
+			if (body.instructions == null) continue;
+			for (AbstractInsnNode insn : body.instructions) {
+				if (!(insn instanceof MethodInsnNode site) || !site.owner.equals(call.owner()) || !site.name.equals(call.name())
+						|| !site.desc.equals(call.descriptor())) continue;
+				if (site.getOpcode() != Opcodes.INVOKESTATIC) return false;
+				calls++;
+			}
+		}
+		return calls > 0;
+	}
+
+	/**
+	 * Gives {@code handler} the arguments {@code moved} appended past {@code named}, and passes them to each invoke of
+	 * {@code named}. Captured target arguments stay after the call's arguments, which is where Mixin reads them.
+	 */
+	private static void forwardAppendedArguments(MethodNode handler, String named, String moved) {
+		Member own = parse(named);
+		Member call = parse(moved);
+		Type[] wanted = Type.getArgumentTypes(own.descriptor());
+		Type[] wide = Type.getArgumentTypes(call.descriptor());
+		Type[] extra = Arrays.copyOfRange(wide, wanted.length, wide.length);
+		Type[] params = Type.getArgumentTypes(handler.desc);
+		Type[] rewritten = new Type[params.length + extra.length];
+		System.arraycopy(params, 0, rewritten, 0, wanted.length);
+		System.arraycopy(extra, 0, rewritten, wanted.length, extra.length);
+		System.arraycopy(params, wanted.length, rewritten, wanted.length + extra.length, params.length - wanted.length);
+		int insertAt = parameterSlot(handler, wanted.length);
+		int extraSlots = 0;
+		for (Type argument : extra) extraSlots += argument.getSize();
+		shiftSlots(handler, insertAt, extraSlots);
+		shiftFrames(handler, insertAt, extra);
+		handler.visibleParameterAnnotations = widenParameterAnnotations(handler.visibleParameterAnnotations, wanted.length, extra.length);
+		handler.invisibleParameterAnnotations = widenParameterAnnotations(handler.invisibleParameterAnnotations, wanted.length, extra.length);
+		handler.desc = Type.getMethodDescriptor(Type.getReturnType(handler.desc), rewritten);
+		handler.signature = null;
+
+		int[] extraLocals = new int[extra.length];
+		int slot = insertAt;
+		for (int i = 0; i < extra.length; i++) {
+			extraLocals[i] = slot;
+			slot += extra[i].getSize();
+		}
+		for (AbstractInsnNode insn : handler.instructions.toArray()) {
+			if (!(insn instanceof MethodInsnNode site) || site.getOpcode() != Opcodes.INVOKESTATIC || !site.owner.equals(own.owner())
+					|| !site.name.equals(own.name()) || !site.desc.equals(own.descriptor())) continue;
+			InsnList prefix = new InsnList();
+			for (int i = 0; i < extra.length; i++) prefix.add(new VarInsnNode(extra[i].getOpcode(Opcodes.ILOAD), extraLocals[i]));
+			handler.instructions.insertBefore(site, prefix);
+			site.owner = call.owner();
+			site.name = call.name();
+			site.desc = call.descriptor();
+		}
+		if (handler.maxLocals > 0) handler.maxLocals += extraSlots;
+		handler.maxStack += extraSlots;
+	}
+
+	/** The local slot where parameter {@code index} begins, counting {@code this} when the handler is not static. */
+	private static int parameterSlot(MethodNode handler, int index) {
+		int slot = (handler.access & Opcodes.ACC_STATIC) == 0 ? 1 : 0;
+		Type[] params = Type.getArgumentTypes(handler.desc);
+		for (int i = 0; i < index && i < params.length; i++) slot += params[i].getSize();
+		return slot;
+	}
+
+	private static void shiftSlots(MethodNode handler, int from, int by) {
+		for (AbstractInsnNode insn : handler.instructions) {
+			if (insn instanceof VarInsnNode variable && variable.var >= from) variable.var += by;
+			else if (insn instanceof IincInsnNode increment && increment.var >= from) increment.var += by;
+		}
+		if (handler.localVariables != null) {
+			for (LocalVariableNode local : handler.localVariables) if (local.index >= from) local.index += by;
+		}
+	}
+
+	private static void shiftFrames(MethodNode handler, int slot, Type[] extra) {
+		for (AbstractInsnNode insn : handler.instructions) {
+			if (!(insn instanceof FrameNode frame) || (frame.type != Opcodes.F_NEW && frame.type != Opcodes.F_FULL) || frame.local == null) continue;
+			int index = frameLocalIndex(frame.local, slot);
+			if (index < 0) continue;
+			if (!(frame.local instanceof ArrayList)) frame.local = new ArrayList<>(frame.local);
+			for (int i = extra.length - 1; i >= 0; i--) insertFrameType(frame.local, index, extra[i]);
+		}
+	}
+
+	/** Whether every explicit frame can take a parameter inserted at {@code slot}. Compressed frames are relative. */
+	private static boolean framesAccept(MethodNode handler, int slot) {
+		for (AbstractInsnNode insn : handler.instructions) {
+			if (!(insn instanceof FrameNode frame)) continue;
+			int type = frame.type;
+			if (type == Opcodes.F_SAME || type == Opcodes.F_SAME1 || type == Opcodes.F_APPEND || type == Opcodes.F_CHOP) continue;
+			if (type != Opcodes.F_NEW && type != Opcodes.F_FULL) return false;
+			if (frame.local != null && frameLocalIndex(frame.local, slot) < 0) return false;
+		}
+		return true;
+	}
+
+	/** Index in an expanded frame's local list of the type that occupies {@code slot}, or {@code -1}. */
+	private static int frameLocalIndex(List<Object> local, int slot) {
+		int index = 0;
+		int at = 0;
+		while (at < slot) {
+			if (index >= local.size()) return -1;
+			Object type = local.get(index);
+			boolean wide = type == Opcodes.LONG || type == Opcodes.DOUBLE;
+			boolean topped = wide && index + 1 < local.size() && local.get(index + 1) == Opcodes.TOP;
+			index += topped ? 2 : 1;
+			at += wide ? 2 : 1;
+		}
+		return at == slot ? index : -1;
+	}
+
+	private static void insertFrameType(List<Object> local, int index, Type type) {
+		int sort = type.getSort();
+		if (sort == Type.LONG || sort == Type.DOUBLE) {
+			local.add(index, sort == Type.LONG ? Opcodes.LONG : Opcodes.DOUBLE);
+			local.add(index + 1, Opcodes.TOP);
+			return;
+		}
+		if (sort == Type.OBJECT || sort == Type.ARRAY) {
+			local.add(index, type.getInternalName());
+			return;
+		}
+		local.add(index, sort == Type.FLOAT ? Opcodes.FLOAT : Opcodes.INTEGER);
+	}
+
+	private static List<AnnotationNode>[] widenParameterAnnotations(List<AnnotationNode>[] annotations, int at, int extra) {
+		if (annotations == null || extra == 0) return annotations;
+		@SuppressWarnings("unchecked")
+		List<AnnotationNode>[] rewritten = new List[annotations.length + extra];
+		int head = Math.min(at, annotations.length);
+		System.arraycopy(annotations, 0, rewritten, 0, head);
+		if (annotations.length > head) System.arraycopy(annotations, head, rewritten, head + extra, annotations.length - head);
+		return rewritten;
 	}
 
 	/** A fixed prefix argument keeps its index/type when the carrier appends arguments. A full-arguments
@@ -542,7 +775,13 @@ public final class MixinAtWidenedCall {
 					annotation.values.set(i + 1, moved);
 					widened++;
 					moves.add(new String[] {target, moved});
-					if (REDIRECT.equals(injector.desc)) {
+					if (REDIRECT.equals(injector.desc) && redirectable(moved) == null) {
+						ForbricLog.info("[Forbric/Mixin] %s: @Redirect %s names the vanilla signature of a static call, and "
+								+ "nothing in the method it selects calls that — pointed at %s, the same call with the "
+								+ "parameters the surviving carrier appended; %s calls the vanilla signature, and that call "
+								+ "now receives the appended arguments",
+								mixinName.replace('/', '.'), target, moved, handler.name);
+					} else if (REDIRECT.equals(injector.desc)) {
 						ForbricLog.info("[Forbric/Mixin] %s: @Redirect %s names the vanilla signature of a static call, and "
 								+ "nothing in the method it selects calls that — pointed at %s, the same call with the "
 								+ "parameters the surviving carrier appended; %s takes them and hands its original the "

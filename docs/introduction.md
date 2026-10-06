@@ -952,7 +952,7 @@ script to `-Dforbric.dependencyDialog=off`).
 
 ## 13. The installer — `forbric-kernel-installer/`
 
-Pure JDK, no dependencies, bytecode release 17, version `0.10`.
+Pure JDK, no dependencies, bytecode release 17, version `0.11`. It installs Minecraft 26.2 only.
 
 ```
 java -jar forbric-kernel-installer.jar                     # window (InstallerGui)
@@ -1052,7 +1052,7 @@ kernel. The weld's design is documented in `forbric-loader/README.md` and `forbr
 ECXP-Forbric+/
 ├── README.md                      player-facing entry for this fork
 ├── docs/introduction.md           this document
-├── docs/MULTIVERSION_PLAN.md      26.2 / 1.21.8 / 1.21.1 pin plan
+├── docs/MULTIVERSION_PLAN.md      why 0.11 ships 26.2 only; the old 1.21 pins
 ├── LICENSE, NOTICE
 ├── bootstrap.sh                   clones ./fabric-loader for forbric-loader (not needed by the kernel)
 ├── docs/MOD_TEST_FAILURES.md      per-mod compatibility results (Chinese)
@@ -1276,7 +1276,7 @@ Break one and the failure usually surfaces far from the cause.
   dependencies, into a world, screenshot, exit) on three fresh random Modrinth sets against the current `main`
   code: 89.0 % loaded without failure lines on average (91.8 % reached the world; 79.1 % with nothing reported
   DEGRADED in the load report), against 80.5 % for release v0.2.0 on the same jars.
-- **Versions.** `forbric-kernel/build.gradle` says `0.1.0-SNAPSHOT`; the installer is `0.10`. `net.forbric.api`
+- **Versions.** `forbric-kernel/build.gradle` says `0.1.0-SNAPSHOT`; the installer is `0.11` and accepts Minecraft 26.2 only. `net.forbric.api`
   is internal and changes without notice.
 
 ## 20. Further reading

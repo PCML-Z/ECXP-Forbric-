@@ -4,15 +4,11 @@
 
 PMCL 团队基于 [Forbric](https://github.com/Ray-T-r/Minecraft-Forbric-mod-loader) 的增强版。一个游戏里同时加载 Fabric、Forge 和 NeoForge 模组。
 
-上游 Forbric 目前只覆盖 Minecraft 26.2。这一版把安装器的 pin 扩到了 **26.2、1.21.8、1.21.1**，并且使用自己的版本号，不会覆盖已经装好的 Forbric。
+上游 Forbric 覆盖 Minecraft 26.2。这一版也只支持 26.2，并且使用自己的版本号，不会覆盖已经装好的 Forbric。0.10 曾经钉过 1.21.8 和 1.21.1；0.11 去掉了，因为这两个版本的锚点没有按各自的游戏重测过。
 
 | Minecraft | 装好后的版本号 | 状态 |
 | --- | --- | --- |
-| 26.2 | `26.2-ecxp-forbric` | 与上游同一条内核路径，pin 已按字节核对 |
-| 1.21.8 | `1.21.8-ecxp-forbric` | 安装坐标已核对；游戏内锚点还没按这个版本重测 |
-| 1.21.1 | `1.21.1-ecxp-forbric` | 同上 |
-
-1.21.x 能走完安装，不代表模组行为已经和 26.2 一样。锚点表仍是按 26.2 实测的，见 [多版本计划](docs/MULTIVERSION_PLAN.md)。
+| 26.2 | `26.2-ecxp-forbric` | 唯一支持的版本。与上游同一条内核路径，pin 已按字节核对 |
 
 ## 仓库里什么在用
 
@@ -37,7 +33,7 @@ Java 包名仍然是 `net.forbric`。这是内核和模组对接的内部名字�
 java -jar forbric-kernel-installer-<版本>.jar --dir <游戏目录> --mc 26.2 --release <tag>
 ```
 
-`--mc` 可以是 `26.2`、`1.21.8` 或 `1.21.1`。不带参数会打开窗口。
+`--mc` 是 `26.2`。不带参数会打开窗口。
 
 这个仓库还没有 GitHub Release 时，安装器 jar 需要自己构建：
 

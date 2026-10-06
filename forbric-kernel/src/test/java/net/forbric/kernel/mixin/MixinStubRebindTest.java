@@ -13,13 +13,19 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FrameNode;
+import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.JumpInsnNode;
+import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.VarInsnNode;
@@ -616,6 +622,159 @@ class MixinStubRebindTest {
 		assertEquals(MixinFit.Verdict.FIT, fit.verdict(), fit.toString());
 		System.setProperty(MixinStubRebind.PROPERTY, "off");
 		assertEquals(MixinFit.Verdict.PARTIAL, MixinFit.evaluate(mixin, resolver).verdict(), "the rebind's switch");
+	}
+
+	/**
+	 * Language Reload redirects {@code Language.loadFromJson(InputStream, BiConsumer)} inside the three-argument
+	 * {@code ClientLanguage.appendFrom}, and calls that method itself so it can keep a per-language copy. The merged
+	 * body is the four-argument overload, and its call gained the consumer component translations are stored through.
+	 * The selector moves onto that body and the handler's own call receives the extra consumer; the language code it
+	 * captured from {@code appendFrom} stays the argument after the call.
+	 */
+	@Test void languageReloadsLoadRedirectKeepsTheComponentConsumer() throws Exception {
+		ClassNode client = merged("net/minecraft/client/resources/language/ClientLanguage");
+		byte[] language;
+		try (ZipFile zip = new ZipFile(MERGED.toFile())) {
+			language = zip.getInputStream(zip.getEntry(client.name + ".class")).readAllBytes();
+		}
+		byte[] raw = classBytes(languageReloadShaped(true));
+		java.util.function.Function<String, byte[]> resolver = name -> name.equals(client.name + ".class") ? language : null;
+		assertNotEquals(MixinFit.Verdict.FIT, MixinFit.evaluate(raw, resolver).verdict(), "premise: bound to the stub");
+		MixinStubRebind.noteEcosystem("jerozgen/languagereload/mixin/ClientLanguageMixin", Ecosystem.FABRIC);
+		MixinFit.Result fit = MixinFit.evaluate(raw, resolver);
+		assertEquals(MixinFit.Verdict.FIT, fit.verdict(), fit.toString());
+
+		ClassNode mixin = expanded(languageReloadShaped(true));
+		assertEquals(1, MixinStubRebind.adapt(mixin, name -> client));
+		assertEquals(1, MixinAtWidenedCall.widen(mixin, name -> client));
+		MethodNode handler = mixin.methods.stream().filter(m -> m.name.equals("onAppendFrom$saveSeparately")).findFirst().orElseThrow();
+		assertEquals(List.of("appendFrom(Ljava/lang/String;Ljava/util/List;Ljava/util/Map;Ljava/util/Map;)V"),
+				MixinFit.stringList(MixinFit.value(MixinFit.injectorOf(handler), "method")));
+		assertEquals(WIDE_LOAD, MixinFit.value(MixinFit.atNodes(MixinFit.injectorOf(handler)).getFirst(), "target"));
+		assertEquals("(Ljava/io/InputStream;Ljava/util/function/BiConsumer;Ljava/util/function/BiConsumer;Ljava/lang/String;)V",
+				handler.desc);
+		int calls = 0;
+		boolean capturedLanguage = false;
+		for (var insn : handler.instructions) {
+			if (insn instanceof VarInsnNode load && load.getOpcode() == Opcodes.ALOAD && load.var == 3) capturedLanguage = true;
+			if (!(insn instanceof MethodInsnNode call)) continue;
+			assertEquals(WIDE_LOAD_DESC, call.desc, "the handler's own loadFromJson receives the component consumer");
+			var previous = call.getPrevious();
+			while (previous != null && previous.getOpcode() < 0) previous = previous.getPrevious();
+			assertInstanceOf(VarInsnNode.class, previous);
+			assertEquals(2, ((VarInsnNode) previous).var, "the appended consumer is the argument inserted before the capture");
+			calls++;
+		}
+		assertEquals(2, calls);
+		assertTrue(capturedLanguage, "the language code appendFrom was called with is still captured");
+		FrameNode frame = Arrays.stream(handler.instructions.toArray()).filter(FrameNode.class::isInstance).map(FrameNode.class::cast)
+				.filter(f -> f.local != null).findFirst().orElseThrow();
+		assertEquals(List.of("java/io/InputStream", "java/util/function/BiConsumer", "java/util/function/BiConsumer", "java/lang/String"),
+				frame.local);
+		new Analyzer<>(new BasicVerifier()).analyze(mixin.name, handler);
+		assertEquals(0, MixinStubRebind.adapt(mixin, name -> client), "a second pass changes nothing");
+		assertEquals(0, MixinAtWidenedCall.widen(mixin, name -> client), "a second widen changes nothing");
+		System.setProperty(MixinStubRebind.PROPERTY, "off");
+		assertNotEquals(MixinFit.Verdict.FIT, MixinFit.evaluate(raw, resolver).verdict(), "the rebind's switch");
+	}
+
+	/** The installed Language Reload jar, not the miniature: its handler branches and calls loadFromJson twice. */
+	@Test void theInstalledLanguageReloadRedirectForwardsTheComponentConsumer() throws Exception {
+		Path jar = Path.of(System.getProperty("user.home"), ".pmcl/instances/26.2-ecxp-forbric/mods/language-reload-1.7.7+26.2.jar");
+		Assumptions.assumeTrue(Files.isRegularFile(jar), "language reload is not installed in the 26.2 instance");
+		ClassNode client = merged("net/minecraft/client/resources/language/ClientLanguage");
+		ClassNode mixin = new ClassNode();
+		try (ZipFile zip = new ZipFile(jar.toFile())) {
+			new ClassReader(zip.getInputStream(zip.getEntry("jerozgen/languagereload/mixin/ClientLanguageMixin.class")).readAllBytes())
+					.accept(mixin, ClassReader.EXPAND_FRAMES);
+		}
+		MixinStubRebind.noteEcosystem(mixin.name, Ecosystem.FABRIC);
+		assertEquals(1, MixinStubRebind.adapt(mixin, name -> client));
+		assertEquals(1, MixinAtWidenedCall.widen(mixin, name -> client));
+		MethodNode handler = mixin.methods.stream().filter(m -> m.name.equals("onAppendFrom$saveSeparately")).findFirst().orElseThrow();
+		assertEquals("(Ljava/io/InputStream;Ljava/util/function/BiConsumer;Ljava/util/function/BiConsumer;Ljava/lang/String;)V", handler.desc);
+		assertEquals(WIDE_LOAD, MixinFit.value(MixinFit.atNodes(MixinFit.injectorOf(handler)).getFirst(), "target"));
+		new Analyzer<>(new BasicVerifier()).analyze(mixin.name, handler);
+		assertEquals(0, MixinAtWidenedCall.widen(mixin, name -> client));
+	}
+
+	/** A redirect that replaces the call, instead of invoking the vanilla signature, stays on the stub. */
+	@Test void aReplacingRedirectOfAWidenedCallStaysOnTheStub() throws Exception {
+		ClassNode client = merged("net/minecraft/client/resources/language/ClientLanguage");
+		ClassNode mixin = languageReloadShaped(false);
+		MixinStubRebind.noteEcosystem(mixin.name, Ecosystem.FABRIC);
+		assertEquals(0, MixinStubRebind.adapt(mixin, name -> client));
+		assertEquals(0, MixinAtWidenedCall.widen(mixin, name -> client));
+		assertEquals(List.of("appendFrom(Ljava/lang/String;Ljava/util/List;Ljava/util/Map;)V"),
+				MixinFit.stringList(MixinFit.value(MixinFit.injectorOf(mixin.methods.getFirst()), "method")));
+	}
+
+	/** NeoForge's own appendFrom is already the stub, so a NeoForge mod's selector stays where it was compiled. */
+	@Test void aNeoForgeLoadRedirectStaysOnTheAppendFromStub() throws Exception {
+		ClassNode client = merged("net/minecraft/client/resources/language/ClientLanguage");
+		ClassNode mixin = languageReloadShaped(true);
+		MixinStubRebind.noteEcosystem(mixin.name, Ecosystem.NEOFORGE);
+		assertEquals(0, MixinStubRebind.adapt(mixin, name -> client));
+	}
+
+	private static final String WIDE_LOAD_DESC = "(Ljava/io/InputStream;Ljava/util/function/BiConsumer;Ljava/util/function/BiConsumer;)V";
+	private static final String WIDE_LOAD = "Lnet/minecraft/locale/Language;loadFromJson" + WIDE_LOAD_DESC;
+
+	/** Language Reload's redirect in miniature. {@code calls} invokes the two-argument load; otherwise the handler replaces it. */
+	private static ClassNode languageReloadShaped(boolean calls) {
+		ClassNode mixin = new ClassNode();
+		mixin.version = Opcodes.V21;
+		mixin.access = Opcodes.ACC_PUBLIC | Opcodes.ACC_ABSTRACT;
+		mixin.name = "jerozgen/languagereload/mixin/ClientLanguageMixin";
+		mixin.superName = "java/lang/Object";
+		AnnotationNode type = new AnnotationNode("Lorg/spongepowered/asm/mixin/Mixin;");
+		type.values = new java.util.ArrayList<>(List.of("value", new java.util.ArrayList<>(List.of(
+				Type.getObjectType("net/minecraft/client/resources/language/ClientLanguage")))));
+		mixin.invisibleAnnotations = new java.util.ArrayList<>(List.of(type));
+		String narrow = "(Ljava/io/InputStream;Ljava/util/function/BiConsumer;)V";
+		AnnotationNode at = new AnnotationNode("Lorg/spongepowered/asm/mixin/injection/At;");
+		at.values = new java.util.ArrayList<>(List.of("value", "INVOKE", "target", "Lnet/minecraft/locale/Language;loadFromJson" + narrow));
+		AnnotationNode redirect = new AnnotationNode("Lorg/spongepowered/asm/mixin/injection/Redirect;");
+		redirect.values = new java.util.ArrayList<>(List.of("method",
+				new java.util.ArrayList<>(List.of("appendFrom(Ljava/lang/String;Ljava/util/List;Ljava/util/Map;)V")), "at", at));
+		MethodNode handler = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC, "onAppendFrom$saveSeparately",
+				"(Ljava/io/InputStream;Ljava/util/function/BiConsumer;Ljava/lang/String;)V", null, null);
+		handler.visibleAnnotations = new java.util.ArrayList<>(List.of(redirect));
+		if (calls) {
+			LabelNode missing = new LabelNode();
+			LabelNode done = new LabelNode();
+			handler.instructions.add(new VarInsnNode(Opcodes.ALOAD, 2));
+			handler.instructions.add(new JumpInsnNode(Opcodes.IFNULL, missing));
+			handler.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+			handler.instructions.add(new VarInsnNode(Opcodes.ALOAD, 1));
+			handler.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "net/minecraft/locale/Language", "loadFromJson", narrow, false));
+			handler.instructions.add(new JumpInsnNode(Opcodes.GOTO, done));
+			handler.instructions.add(missing);
+			handler.instructions.add(new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
+			handler.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+			handler.instructions.add(new VarInsnNode(Opcodes.ALOAD, 1));
+			handler.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "net/minecraft/locale/Language", "loadFromJson", narrow, false));
+			handler.instructions.add(done);
+			handler.instructions.add(new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
+		}
+		handler.instructions.add(new InsnNode(Opcodes.RETURN));
+		handler.maxStack = 2;
+		handler.maxLocals = 3;
+		mixin.methods = new java.util.ArrayList<>(List.of(handler));
+		return mixin;
+	}
+
+	/** The class as Mixin reads it: frames expanded, so a full frame lists every local the extra parameter has to join. */
+	private static ClassNode expanded(ClassNode mixin) {
+		ClassNode out = new ClassNode();
+		new ClassReader(classBytes(mixin)).accept(out, ClassReader.EXPAND_FRAMES);
+		return out;
+	}
+
+	private static byte[] classBytes(ClassNode mixin) {
+		ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+		mixin.accept(writer);
+		return writer.toByteArray();
 	}
 
 	/** A non-capturing lambda is a constant; a capturing one, or a string concatenation, is work the stub does. */

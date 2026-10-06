@@ -305,6 +305,20 @@ public final class MixinFit {
 			java.util.function.Predicate<String> gameClass, MixinAddedMembers.View added,
 			NativeAbsentTargets.Context nativeView) {
 		ClassNode mixin = read(mixinBytes, false);
+		// Most anchors are annotations. A redirect that calls the vanilla method needs the handler body, and only
+		// then: reading every mixin with code is the cost this skip exists to avoid.
+		Supplier<ClassNode> mixinCode = new Supplier<>() {
+			private ClassNode read;
+			private boolean done;
+
+			@Override public ClassNode get() {
+				if (!done) {
+					done = true;
+					read = MixinFit.read(mixinBytes, true);
+				}
+				return read;
+			}
+		};
 		List<String> targets = mixinTargets(mixin);
 		if (targets.isEmpty()) return new Result(Verdict.FIT, List.of(), 0, 0, List.of());
 
@@ -346,7 +360,7 @@ public final class MixinFit {
 					&& (gameOwned || NativeAbsentTargets.inVanillaPackages(targetName))
 					? nativeView : NativeAbsentTargets.Context.NONE;
 			List<Anchor> anchors = new ArrayList<>(anchorsOf(mixin, target, targetResolver,
-					added == null ? MixinAddedMembers.View.NONE : added, declared, asked));
+					added == null ? MixinAddedMembers.View.NONE : added, declared, asked, mixinCode));
 			// A renumbered anonymous class: every member anchor may resolve and still belong to a different class
 			// than the one vanilla compiled at that name. Soft — it forces PARTIAL, never UNFIT.
 			if (moved == null && gameOwned && MergedBaseAnonymousDrift.drifted(targetName)) {
@@ -472,7 +486,8 @@ public final class MixinFit {
 	}
 
 	private static List<Anchor> anchorsOf(ClassNode mixin, ClassNode target, Function<String, byte[]> resolver,
-			MixinAddedMembers.View added, String declared, NativeAbsentTargets.Context nativeView) {
+			MixinAddedMembers.View added, String declared, NativeAbsentTargets.Context nativeView,
+			Supplier<ClassNode> mixinCode) {
 		// The target again with its local variable tables, read once and only if an injector needs it.
 		Supplier<ClassNode> withLocals = new Supplier<>() {
 			private ClassNode read;
@@ -536,7 +551,7 @@ public final class MixinFit {
 			AnnotationNode injector = injectorOf(m);
 			if (injector == null) continue;
 			int first = out.size();
-			injectorAnchors(mixin, m, injector, target, resolver, withLocals, nativeView, out);
+			injectorAnchors(mixin, m, injector, target, resolver, withLocals, nativeView, mixinCode, out);
 			String group = groupOf(m);
 			if (group != null) {
 				for (int i = first; i < out.size(); i++) out.get(i).alternativeOf(group, m);
@@ -561,7 +576,7 @@ public final class MixinFit {
 	 */
 	private static void injectorAnchors(ClassNode mixin, MethodNode m, AnnotationNode injector, ClassNode target,
 			Function<String, byte[]> resolver, Supplier<ClassNode> withLocals, NativeAbsentTargets.Context nativeView,
-			List<Anchor> out) {
+			Supplier<ClassNode> mixinCode, List<Anchor> out) {
 		// An injector's `method` is a list of CANDIDATE selectors, not a conjunction. Mixin's default
 		// require=1 counts matches across the whole list, so mods routinely ship alternative names to span
 		// mappings or MC versions — Iris's LevelRenderer mixin carries both `lambda$addSkyPass$0` AND
@@ -649,9 +664,25 @@ public final class MixinFit {
 			// This is MixinFit's own parse of the mixin, never the node Mixin applies.
 			if (pinnedAs != null) setSelectors(injector, List.of(pinnedAs));
 			MethodNode moved = MixinStubRebind.destination(mixin, m, target);
+			ClassNode askedMixin = mixin;
+			MethodNode asked = m;
+			// This mixin was read without code. A redirect that forwards the carrier's extra arguments is decided
+			// from the calls in the handler, so ask again with the body.
+			if (moved == null && (m.instructions == null || m.instructions.size() == 0)) {
+				MethodNode coded = withInstructions(m, mixinCode);
+				ClassNode owner = coded == m ? null : mixinCode.get();
+				if (owner != null) {
+					MethodNode retry = MixinStubRebind.destination(owner, coded, target);
+					if (retry != null) {
+						moved = retry;
+						askedMixin = owner;
+						asked = coded;
+					}
+				}
+			}
 			// A @Local by name is checked against the body's local variable table, which this read skipped.
 			ClassNode locals = moved == null ? withLocals.get() : null;
-			if (locals != null) moved = MixinStubRebind.destination(mixin, m, locals);
+			if (locals != null) moved = MixinStubRebind.destination(askedMixin, asked, locals);
 			if (moved != null) hits = new ArrayList<>(List.of(moved));
 		}
 		// Bound is not run. An injector whose every method is one nothing in the merged game calls attaches and
@@ -694,6 +725,10 @@ public final class MixinFit {
 				}
 			} else if (!anywhere) {
 				anywhere = MixinAtWidenedCall.wouldMove(m, injector, target.methods, atValue, atTarget) != null
+						// The rebind above may have landed this injector on a body whose call exists only in widened
+						// form. wouldMove still reads the selector, which names the stub, so it asks the body instead.
+						// The handler MixinFit holds has no code; the forward is decided from the calls it makes.
+						|| MixinAtWidenedCall.willRetarget(withInstructions(m, mixinCode), injector, hits, atValue, atTarget)
 						|| MixinWrapOperationShim.wouldWrap(mixin.name, m, target.methods) != null
 						// …and MixinSubtypeOwnerRetarget's: the same call through another owner (Decoder.parse made as
 						// Codec.parse, Monster.lookAt made as Mob.lookAt through the field the merge widened).
@@ -1747,6 +1782,17 @@ public final class MixinFit {
 		int flags = ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES | (withCode ? 0 : ClassReader.SKIP_CODE);
 		new ClassReader(bytes).accept(node, flags);
 		return node;
+	}
+
+	/** The same method with its instructions, when {@code handler} was read with {@code SKIP_CODE}. */
+	private static MethodNode withInstructions(MethodNode handler, Supplier<ClassNode> mixinCode) {
+		if (handler == null || handler.instructions != null && handler.instructions.size() > 0 || mixinCode == null) return handler;
+		ClassNode coded = mixinCode.get();
+		if (coded == null || coded.methods == null) return handler;
+		for (MethodNode method : coded.methods) {
+			if (method.name.equals(handler.name) && method.desc.equals(handler.desc)) return method;
+		}
+		return handler;
 	}
 
 	/** {@code internalName} with everything, local variable tables included, as the adapters read it; null when unseen. */

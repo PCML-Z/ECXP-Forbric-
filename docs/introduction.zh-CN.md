@@ -417,7 +417,7 @@ Fabric mod 的配置界面只在一个地方声明：一个实现 Mod Menu 的 `
 
 ## 13. 安装器 —— `forbric-kernel-installer/`
 
-纯 JDK 实现，没有依赖，字节码 release 17，版本 `0.10`。
+纯 JDK 实现，没有依赖，字节码 release 17，版本 `0.11`。只安装 Minecraft 26.2。
 
 ```
 java -jar forbric-kernel-installer.jar                     # window (InstallerGui)
@@ -479,7 +479,7 @@ forge-runtime ──────────────────────
 ECXP-Forbric+/
 ├── README.md                      本仓库的玩家入口
 ├── docs/introduction.zh-CN.md     本文
-├── docs/MULTIVERSION_PLAN.md      26.2 / 1.21.8 / 1.21.1 的 pin 计划
+├── docs/MULTIVERSION_PLAN.md      0.11 为什么只发布 26.2，以及旧的 1.21 pin
 ├── LICENSE, NOTICE
 ├── bootstrap.sh                   clones ./fabric-loader for forbric-loader (not needed by the kernel)
 ├── docs/MOD_TEST_FAILURES.md      per-mod compatibility results (Chinese)
@@ -634,7 +634,7 @@ java -cp <boot-cp> net.forbric.kernel.boot.Main --scan --mods <dir> --report out
 - **`PARTIAL` 的 mixin 默认应用** —— 宁可保留只应用了一半的结果（并让它可见），也不丢掉还能工作的钩子。
 - **一个类，一份副本。** 同一个 mod 的两个生态构建相互竞争时，只有一个胜出；落败的生态看到的是在场别名，而不是该 mod 自己的平台胶水代码。
 - **靠实测，不靠承诺。** `MOD_TEST_FAILURES.md` 记录了针对当前 `main` 代码的逐 mod 测试（每个 jar 只带上它必需的依赖单独运行，进入世界、截图、退出），用的是三组全新随机抽取的 Modrinth mod：平均 89.0% 加载时没有失败行（91.8% 进入了世界；79.1% 在加载报告里没有任何一项被标为 DEGRADED），而同一批 jar 在发布版 v0.2.0 上是 80.5%。
-- **版本。** `forbric-kernel/build.gradle` 写的是 `0.1.0-SNAPSHOT`；安装器是 `0.10`。`net.forbric.api` 是内部 API，随时可能变动，不另行通知。
+- **版本。** `forbric-kernel/build.gradle` 写的是 `0.1.0-SNAPSHOT`；安装器是 `0.11`，只接受 Minecraft 26.2。`net.forbric.api` 是内部 API，随时可能变动，不另行通知。
 
 ## 20. 延伸阅读
 

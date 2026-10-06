@@ -106,8 +106,7 @@ final class ArtifactBuilder {
 				.build(forgeUserdev, forgeCfg, forgeRuntime.file);
 
 		// ---- NeoForge ----
-		// Every supported generation has a NeoForge (21.1.x for 1.21.1, 21.8.x for 1.21.8, 26.2.0.88 for 26.2),
-		// so all three take the three-carrier path. The guard is not about the version being unknown — forVersion
+		// The shipped generation has a NeoForge (26.2.0.88). The guard is not about the version being unknown — forVersion
 		// already rejected that — but about a generation added later with an empty neoforge pin: the byte-merger
 		// only implements vanilla + Forge + NeoForge, so a missing pin has to stop here rather than quietly
 		// produce a two-carrier base nobody link-checked.

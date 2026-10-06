@@ -352,6 +352,12 @@ public final class ForbricMixinService
 		// Last so every specific adapter above has had its say: FabricEntityMixinAnchors moves fabric-api's elytra
 		// check onto NeoForge's gliding attribute read, and a rebind first would have changed the selector it matches.
 		MixinStubRebind.adapt(node, this::mergedBaseNodeWithCode);
+		// The widen above ran while selectors still named carrier stubs. A stub that only forwards contains none of the
+		// call, so that pass cannot see the longer form the body makes; the rebind has now selected the body. A second
+		// pass retargets the point and, for a redirect that calls the vanilla signature itself, threads the carrier's
+		// appended arguments into that call. A point the first pass already moved names a call the body makes exactly,
+		// and this pass leaves it.
+		MixinAtWidenedCall.widen(node, this::mergedBaseNodeWithCode);
 		// …and a NeoForge or MinecraftForge mod's TAIL on a method whose early returns the kernel restored keeps every
 		// return its own loader's folded body sent there. After the rebind: it reads the injector's final target.
 		MixinNativeTail.adapt(node, this::mergedBaseNodeWithCode);

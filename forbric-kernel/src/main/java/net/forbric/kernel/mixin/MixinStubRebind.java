@@ -425,6 +425,7 @@ public final class MixinStubRebind {
 
 		List<AnnotationNode> points = MixinFit.atNodes(injector);
 		if (points.isEmpty()) return null;
+		boolean widenedOnly = false;
 		if (variable) {
 			if (!namedLocalMoved(injector, handler, stub, delegate)) return null;
 		} else {
@@ -433,7 +434,15 @@ public final class MixinStubRebind {
 				if (EDGE_POINTS.contains(value)) continue;
 				String member = MixinFit.asString(MixinFit.value(at, "target"));
 				if (!CALL_POINTS.contains(value) || member == null) return null;
-				if (MixinFit.containsMember(stub, member) || !MixinFit.containsMember(delegate, member)) return null;
+				if (MixinFit.containsMember(stub, member)) return null;
+				if (MixinFit.containsMember(delegate, member)) continue;
+				// Present on the body only as the carrier's longer call. The selector move and the point move have to
+				// happen together: a selector that lands on the body while the @At still names the short call is a miss
+				// Mixin rejects, which is worse than the injector staying on the stub. Language Reload's redirect of
+				// loadFromJson sits in the three-argument appendFrom, and the four-argument body calls the three-argument
+				// loadFromJson.
+				if (!MixinAtWidenedCall.willRetarget(handler, injector, delegate, value, member)) return null;
+				widenedOnly = true;
 			}
 		}
 
@@ -457,6 +466,13 @@ public final class MixinStubRebind {
 			// Past the injector's own contract, un-annotated parameters are captures of the target's arguments: they
 			// must still be the delegate's, in the same places, carrying what the stub was handed.
 			int own = capturesGuarded() ? intrinsicArity(injector, params, plain, delegate) : plain;
+			if (own < 0 && widenedOnly) {
+				// The body's call is the longer form, so the exact member is not there to measure. The handler's own
+				// contract is still the signature it was compiled against.
+				if (points.size() != 1) return null;
+				String member = MixinFit.asString(MixinFit.value(points.getFirst(), "target"));
+				own = member == null ? -1 : MixinAtWidenedCall.namedArity(delegate, member);
+			}
 			if (own < 0 || own > plain) return null;
 			// Decided last: everything below must also hold for "only its captures kept it here" to be true.
 			lost = !capturesSurvive(injector, params, own, plain, stub, delegation);

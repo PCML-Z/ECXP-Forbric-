@@ -363,6 +363,7 @@ class MixinAtWidenedCallTest {
 		MethodNode inner = mixin.methods.stream().filter(m -> m.name.equals(aside)).findFirst().orElseThrow();
 		assertEquals("(Lnet/minecraft/core/RegistryAccess;)Ljava/util/function/Function;", inner.desc);
 		assertNull(MixinFit.injectorOf(inner), "the original keeps its body and gives its annotation to the wrapper");
+		assertEquals(0, MixinAtWidenedCall.widen(mixin, name -> listener()), "a second pass changes nothing");
 	}
 
 	/** RED control: the switch leaves the redirect as compiled, and the verdict says which point is missing. */
