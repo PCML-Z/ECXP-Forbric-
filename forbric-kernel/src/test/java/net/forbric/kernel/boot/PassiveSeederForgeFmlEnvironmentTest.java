@@ -178,16 +178,9 @@ class PassiveSeederForgeFmlEnvironmentTest {
 		return cl;
 	}
 
-	/** The same library tree {@code build.gradle} resolves brigadier from, with the same overrides. */
+	/** The Gson the version JSON names, the same one the game-side compile reads. */
 	private static Path newestGson() throws IOException {
-		String configured = System.getProperty("forbric.mcLibraries");
-		Path root = configured != null ? Path.of(configured) : TestFixtures.minecraftDir().resolve("libraries");
-		Path gsonDir = root.resolve("com/google/code/gson/gson");
-		if (!Files.isDirectory(gsonDir)) return null;
-		try (var found = Files.walk(gsonDir)) {
-			return found.filter(f -> f.getFileName().toString().endsWith(".jar")).sorted().reduce((a, b) -> b)
-					.orElse(null);
-		}
+		return TestFixtures.minecraftLibrary("com/google/code/gson/gson");
 	}
 
 	private static boolean hasFmlEnvironment(ClassLoader cl) {

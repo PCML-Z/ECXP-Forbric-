@@ -952,7 +952,7 @@ script to `-Dforbric.dependencyDialog=off`).
 
 ## 13. The installer — `forbric-kernel-installer/`
 
-Pure JDK, no dependencies, bytecode release 17, version `0.11`. It installs Minecraft 26.2 only.
+Pure JDK, no dependencies, bytecode release 17, version `0.1.3`. It installs Minecraft 26.2 only.
 
 ```
 java -jar forbric-kernel-installer.jar                     # window (InstallerGui)
@@ -1276,7 +1276,7 @@ Break one and the failure usually surfaces far from the cause.
   dependencies, into a world, screenshot, exit) on three fresh random Modrinth sets against the current `main`
   code: 89.0 % loaded without failure lines on average (91.8 % reached the world; 79.1 % with nothing reported
   DEGRADED in the load report), against 80.5 % for release v0.2.0 on the same jars.
-- **Versions.** `forbric-kernel/build.gradle` says `0.1.0-SNAPSHOT`; the installer is `0.11` and accepts Minecraft 26.2 only. `net.forbric.api`
+- **Versions.** `forbric-kernel/build.gradle` says `0.1.0-SNAPSHOT`; the installer is `0.1.3` and accepts Minecraft 26.2 only. `net.forbric.api`
   is internal and changes without notice.
 
 ## 20. Further reading

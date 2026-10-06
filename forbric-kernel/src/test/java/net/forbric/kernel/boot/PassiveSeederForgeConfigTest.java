@@ -165,12 +165,7 @@ class PassiveSeederForgeConfigTest {
 	}
 
 	private static Path newestLibrary(String under) throws java.io.IOException {
-		Path root = TestFixtures.minecraftDir().resolve("libraries").resolve(under);
-		if (!Files.isDirectory(root)) return null;
-		try (var stream = Files.walk(root)) {
-			return stream.filter(f -> f.toString().endsWith(".jar") && !f.toString().contains("sources"))
-					.sorted(java.util.Comparator.comparing(f -> f.getFileName().toString())).reduce((a, b) -> b).orElse(null);
-		}
+		return TestFixtures.minecraftLibrary(under);
 	}
 
 	private static Path jar(Path jar, String toml) throws Exception {

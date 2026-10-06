@@ -239,12 +239,6 @@ class KernelForgeModInfoTest {
 	}
 
 	static Path newestUnder(String pattern) throws java.io.IOException {
-		Path root = TestFixtures.minecraftDir().resolve("libraries");
-		Path under = root.resolve(pattern);
-		if (!Files.isDirectory(under)) return null;
-		try (var stream = Files.walk(under)) {
-			return stream.filter(f -> f.toString().endsWith(".jar") && !f.toString().contains("sources"))
-					.sorted(java.util.Comparator.comparing(f -> f.getFileName().toString())).reduce((a, b) -> b).orElse(null);
-		}
+		return TestFixtures.minecraftLibrary(pattern);
 	}
 }

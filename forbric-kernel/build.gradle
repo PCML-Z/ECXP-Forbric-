@@ -136,49 +136,67 @@ def mcLibraries = file(project.findProperty('forbric.mcLibraries')
 				: new File(devMinecraftPrepared ? devMinecraft : defaultMinecraft, 'libraries')))
 // One jar PER PATTERN, never one across all of them: a single fileTree over several includes and a global
 // takeRight(1) keeps whichever name sorts last and silently drops the rest — with brigadier and datafixerupper
-// in the same tree, 'd' > 'b' and brigadier disappears. Last-by-NAME within a pattern is not version-aware
-// either ("10.0.21" sorts before "9.0.19"); that is tolerable only because any version of these two satisfies
-// javac's need to READ the class files, which is all they are here for.
+// in the same tree, 'd' > 'b' and brigadier disappears. Last-by-NAME within a pattern is also not version-aware
+// ("datafixerupper-10.0.21" sorts before "datafixerupper-6.0.8"), so it is only the fallback for a tree that has
+// no version JSON. A launcher's libraries directory holds every generation at once; compiling the game side
+// against the name that sorts last reads the wrong Gson and the wrong DataFixerUpper.
 def lastByNameUnder = { String pattern ->
 	mcLibraries.isDirectory()
 			? fileTree(mcLibraries) { include pattern }.files.sort { it.name }.takeRight(1)
 			: []
 }
-// datafixerupper for the same reason as brigadier, one type further in: net.minecraft.core.Registry implements
-// com.mojang.serialization.Keyable, so javac cannot read Registry — and so cannot read BuiltInRegistries —
-// without it. KernelParticleProviders needs the particle registry to translate its keys.
-def stagedMcLibraries = lastByNameUnder('com/mojang/brigadier/**/*.jar') +
-		lastByNameUnder('com/mojang/datafixerupper/**/*.jar') +
-		// gson, for the same reason and one layer out: fabric-api's resource-condition evaluator takes a
-		// JsonObject, so KernelFabricConditions cannot name its own argument without it. Taken from the same
-		// local Minecraft install as the other two, never bundled — the game supplies it at runtime.
-		lastByNameUnder('com/google/code/gson/**/*.jar') +
-		// netty's buffer types, for the same reason: KernelRecipeSync trial-encodes a recipe into a
-		// RegistryFriendlyByteBuf, which IS a netty ByteBuf, so javac cannot read it without them. Never bundled.
-		lastByNameUnder('io/netty/netty-buffer/**/*.jar') +
-		lastByNameUnder('io/netty/netty-common/**/*.jar')
-
-// LazyOptional's real carrier implementation uses Commons Lang's Mutable types, and every Team Reborn Energy store
-// initialises Reborn's EnergyStorage interface, whose static fields build an Identifier and a DataComponentType
-// (netty, joml, ...). Resolve Minecraft 26.2's OWN library set from its version JSON (the one launch-kernel-server.sh
-// puts on the game's classpath), rather than a stub or whichever cached jar happens to sort last. This is test
-// runtime linkage only and is never bundled.
-def stagedTransferTestLibraries = []
+def stagedMcVersionJson = new File(mcLibraries.parentFile, "versions/${mcVersion}/${mcVersion}.json")
+def versionLibraryFiles = []
+def versionLibraryPaths = []
 // Libraries the JSON lists for every platform (no OS rules) that are not on disk. Those with rules are natives for one
 // OS, so the other platforms' copies being absent is normal.
 def missingTransferTestLibraries = []
-def stagedMcVersionJson = new File(mcLibraries.parentFile, "versions/${mcVersion}/${mcVersion}.json")
 if (stagedMcVersionJson.isFile()) {
 	def versionMetadata = new groovy.json.JsonSlurper().parse(stagedMcVersionJson)
 	versionMetadata.libraries.each { library ->
 		def relativePath = library.downloads?.artifact?.path
-		if (relativePath) {
-			def artifact = new File(mcLibraries, relativePath)
-			if (artifact.isFile()) stagedTransferTestLibraries.add(artifact)
-			else if (!library.rules) missingTransferTestLibraries.add(relativePath)
-		}
+		if (!relativePath) return
+		versionLibraryPaths.add(relativePath.replace('\\', '/'))
+		def artifact = new File(mcLibraries, relativePath)
+		if (artifact.isFile()) versionLibraryFiles.add(artifact)
+		else if (!library.rules) missingTransferTestLibraries.add(relativePath)
 	}
 }
+// datafixerupper: net.minecraft.core.Registry implements com.mojang.serialization.Keyable, so javac cannot read
+// Registry — and so cannot read BuiltInRegistries — without the generation's own copy. gson: fabric-api's
+// resource-condition evaluator takes a JsonObject. netty: RegistryFriendlyByteBuf is a ByteBuf. None of these
+// are bundled; the game supplies them at runtime.
+def compileLibraryPrefixes = [
+		'com/mojang/brigadier/',
+		'com/mojang/datafixerupper/',
+		'com/google/code/gson/gson/',
+		'io/netty/netty-buffer/',
+		'io/netty/netty-common/',
+]
+def stagedMcLibraries = []
+def substituted = []
+compileLibraryPrefixes.each { prefix ->
+	def named = versionLibraryPaths.find { it.startsWith(prefix) && !it.contains('natives') && !it.contains('-sources') }
+	if (named != null) {
+		def artifact = new File(mcLibraries, named)
+		if (artifact.isFile()) stagedMcLibraries.add(artifact)
+		else logger.lifecycle("[forbric] ${stagedMcVersionJson.name} lists ${named}, which is not on disk; " +
+				"not substituting another version from libraries/")
+	} else {
+		def fallback = lastByNameUnder(prefix + '**/*.jar')
+		stagedMcLibraries.addAll(fallback)
+		if (fallback) substituted.add(fallback[0].name)
+	}
+}
+if (stagedMcLibraries) {
+	def source = stagedMcVersionJson.isFile() ? stagedMcVersionJson.name : 'last name under libraries/'
+	def note = substituted ? "; last-name fallback: ${substituted.join(', ')}" : ''
+	logger.lifecycle("[forbric] game-side compile libraries from ${source}: ${stagedMcLibraries.collect { it.name }.join(', ')}${note}")
+}
+
+// The transfer suite and the game-side tests load the same generation's whole library set, not a stub and not
+// whichever cached jar sorts last. Never bundled.
+def stagedTransferTestLibraries = versionLibraryFiles
 
 sourceSets {
 	// `main` keeps the Gradle defaults (src/main/java, src/main/resources). Re-declaring them with srcDir would
@@ -410,6 +428,7 @@ test {
 	// The same for Minecraft's own jar and libraries (TestFixtures.minecraftDir): the directory the game side compiled
 	// against, so a prepared .dev/minecraft or -Pforbric.mcLibraries reaches the tests instead of a platform default.
 	environment 'MC_DIR', mcLibraries.parentFile.absolutePath
+	systemProperty 'forbric.mcVersion', mcVersion
 	systemProperty 'forbric.fabricApi', stagedFabricApi.absolutePath
 	// Refused when the tests RUN, never while the build is configured: this block configures every invocation,
 	// and a root that does not exist is the documented way to build the boot jar as a machine without staged

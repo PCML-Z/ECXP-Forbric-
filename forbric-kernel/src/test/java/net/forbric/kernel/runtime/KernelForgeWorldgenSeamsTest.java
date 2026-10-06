@@ -88,7 +88,7 @@ class KernelForgeWorldgenSeamsTest {
 		TestFixtures.require(Fixture.GAME_SIDE, Files.isDirectory(compiled), "the game-side set is not compiled");
 		List<URL> urls = new java.util.ArrayList<>(List.of(compiled.toUri().toURL(), forgeRt.toUri().toURL(), neoRt.toUri().toURL(), merged.toUri().toURL()));
 		// The bridge's signatures name DataFixerUpper and gson types; the game supplies both at runtime, and the
-		// build takes them from the local Minecraft install by the same last-name-per-pattern rule as build.gradle.
+		// build takes the copy the version JSON names, not whichever file name sorts last in libraries/.
 		for (String pattern : List.of("com/mojang/datafixerupper", "com/google/code/gson", "com/mojang/brigadier")) {
 			Path library = lastByNameUnder(pattern);
 			TestFixtures.require(Fixture.MC_LIBRARIES, library != null, "no staged " + pattern + " jar in the local Minecraft libraries");
@@ -98,12 +98,6 @@ class KernelForgeWorldgenSeamsTest {
 	}
 
 	private static Path lastByNameUnder(String pattern) throws Exception {
-		Path root = TestFixtures.minecraftDir().resolve("libraries");
-		Path under = root.resolve(pattern);
-		if (!Files.isDirectory(under)) return null;
-		try (var stream = Files.walk(under)) {
-			return stream.filter(f -> f.toString().endsWith(".jar")).sorted(java.util.Comparator.comparing(f -> f.getFileName().toString()))
-					.reduce((a, b) -> b).orElse(null);
-		}
+		return TestFixtures.minecraftLibrary(pattern);
 	}
 }

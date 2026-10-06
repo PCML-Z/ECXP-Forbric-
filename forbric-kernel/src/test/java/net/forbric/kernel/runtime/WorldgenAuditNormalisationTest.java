@@ -99,12 +99,12 @@ class WorldgenAuditNormalisationTest {
 	}
 
 	private static Path newestUnder(String pattern) throws Exception {
-		Path libraries = TestFixtures.minecraftDir().resolve("libraries").resolve(pattern.replace('/', java.io.File.separatorChar));
-		if (!Files.isDirectory(libraries)) {
-			libraries = TestFixtures.stagedRoot().resolve("downloads");
-			if (!Files.isDirectory(libraries)) return null;
-		}
-		try (var walk = Files.walk(libraries)) {
+		Path listed = TestFixtures.minecraftLibrary(pattern);
+		if (listed != null) return listed;
+		if (Files.isDirectory(TestFixtures.librariesDir().resolve(pattern))) return null;
+		Path downloads = TestFixtures.stagedRoot().resolve("downloads");
+		if (!Files.isDirectory(downloads)) return null;
+		try (var walk = Files.walk(downloads)) {
 			return walk.filter(p -> p.getFileName().toString().endsWith(".jar")).findFirst().orElse(null);
 		}
 	}

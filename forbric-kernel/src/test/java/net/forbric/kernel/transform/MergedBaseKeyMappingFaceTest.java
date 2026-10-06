@@ -291,11 +291,17 @@ class MergedBaseKeyMappingFaceTest {
 		// reaches into brigadier, DataFixerUpper, fastutil, guava and on. The whole library tree is what the game
 		// itself puts on the classpath, so that is what goes here rather than chasing one NoClassDefFoundError
 		// at a time.
-		Path libraries = mcLibraries();
-		TestFixtures.require(Fixture.MC_LIBRARIES, libraries != null, "the Minecraft library tree is not where this machine keeps it — skipping");
-		try (var jars = Files.walk(libraries)) {
-			for (Path jar : jars.filter(f -> f.toString().endsWith(".jar")).toList()) {
-				urls.add(jar.toUri().toURL());
+		List<Path> listed = TestFixtures.minecraftLibraries();
+		if (listed != null) {
+			TestFixtures.require(Fixture.MC_LIBRARIES, !listed.isEmpty(), "the version JSON names no library that is on disk");
+			for (Path jar : listed) urls.add(jar.toUri().toURL());
+		} else {
+			Path libraries = mcLibraries();
+			TestFixtures.require(Fixture.MC_LIBRARIES, libraries != null, "the Minecraft library tree is not where this machine keeps it — skipping");
+			try (var jars = Files.walk(libraries)) {
+				for (Path jar : jars.filter(f -> f.toString().endsWith(".jar")).toList()) {
+					urls.add(jar.toUri().toURL());
+				}
 			}
 		}
 		return new java.net.URLClassLoader(urls.toArray(new java.net.URL[0]),

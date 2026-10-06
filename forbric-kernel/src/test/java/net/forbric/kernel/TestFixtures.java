@@ -14,10 +14,13 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import org.opentest4j.AssertionFailedError;
@@ -230,8 +233,120 @@ public final class TestFixtures {
 	 * which a launcher directory that also holds older versions keeps beside their {@code netty-codec}.
 	 */
 	public static String nettyCodecLibrary() {
-		return Files.isDirectory(minecraftDir().resolve("libraries/io/netty/netty-codec-base"))
+		try {
+			if (versionNames(librariesDir(), "io/netty/netty-codec-base/", mcVersion())) return "io/netty/netty-codec-base";
+			if (versionNames(librariesDir(), "io/netty/netty-codec/", mcVersion())) return "io/netty/netty-codec";
+		} catch (IOException unreadable) {
+			// The directory heuristic below is what a tree without a readable version JSON already used.
+		}
+		return Files.isDirectory(librariesDir().resolve("io/netty/netty-codec-base"))
 				? "io/netty/netty-codec-base" : "io/netty/netty-codec";
+	}
+
+	/**
+	 * The jar the Minecraft version JSON names under {@code artifactPath}
+	 * ({@code com/mojang/datafixerupper}, {@code com/google/code/gson/gson}, {@code io/netty/netty-buffer}).
+	 *
+	 * <p>A launcher's {@code libraries/} keeps every generation. The last file name is the wrong one:
+	 * {@code datafixerupper-6.0.8} sorts after {@code datafixerupper-10.0.21}, and {@code gson-2.8.0} sorts after
+	 * {@code gson-2.14.0}. When the version JSON names the artifact, that file is the answer, and another copy
+	 * on disk is not a substitute for a missing one. With no JSON, the last name under the directory remains,
+	 * skipping {@code sources} and {@code natives}.
+	 */
+	public static Path minecraftLibrary(String artifactPath) throws IOException {
+		return minecraftLibrary(librariesDir(), artifactPath, mcVersion());
+	}
+
+	/** {@link #minecraftLibrary(String)} against an explicit tree, so a test can prove which jar wins. */
+	static Path minecraftLibrary(Path libraries, String artifactPath, String mcVersion) throws IOException {
+		String prefix = artifactPrefix(artifactPath);
+		Path listed = listedByVersion(libraries, prefix, mcVersion);
+		if (listed != null) return listed;
+		if (versionNames(libraries, prefix, mcVersion)) return null;
+		return newestJar(libraries.resolve(prefix.substring(0, prefix.length() - 1)));
+	}
+
+	/** The libraries directory: {@code -Dforbric.mcLibraries} when set, otherwise {@link #minecraftDir()}/libraries. */
+	public static Path librariesDir() {
+		String configured = System.getProperty("forbric.mcLibraries");
+		if (configured != null && !configured.isBlank()) return Path.of(configured);
+		return minecraftDir().resolve("libraries");
+	}
+
+	private static String mcVersion() {
+		String configured = System.getProperty("forbric.mcVersion", "26.2");
+		return configured == null || configured.isBlank() ? "26.2" : configured.trim();
+	}
+
+	private static String artifactPrefix(String artifactPath) {
+		String prefix = artifactPath.replace('\\', '/');
+		while (prefix.startsWith("/")) prefix = prefix.substring(1);
+		if (!prefix.endsWith("/")) prefix = prefix + "/";
+		return prefix;
+	}
+
+	private static Path versionJson(Path libraries, String mcVersion) {
+		Path parent = libraries.getParent();
+		if (parent == null) return libraries.resolve("missing-version.json");
+		return parent.resolve("versions").resolve(mcVersion).resolve(mcVersion + ".json");
+	}
+
+	private static boolean versionNames(Path libraries, String prefix, String mcVersion) throws IOException {
+		return firstListedPath(libraries, prefix, mcVersion) != null;
+	}
+
+	private static Path listedByVersion(Path libraries, String prefix, String mcVersion) throws IOException {
+		String relative = firstListedPath(libraries, prefix, mcVersion);
+		if (relative == null) return null;
+		Path file = libraries.resolve(relative);
+		return Files.isRegularFile(file) ? file : null;
+	}
+
+	private static String firstListedPath(Path libraries, String prefix, String mcVersion) throws IOException {
+		Path json = versionJson(libraries, mcVersion);
+		if (!Files.isRegularFile(json)) return null;
+		Matcher matcher = Pattern.compile("\"path\"\\s*:\\s*\"(" + Pattern.quote(prefix) + "[^\"]+)\"")
+				.matcher(Files.readString(json));
+		while (matcher.find()) {
+			String relative = matcher.group(1);
+			String name = relative.substring(relative.lastIndexOf('/') + 1);
+			if (name.contains("natives") || name.contains("sources")) continue;
+			return relative;
+		}
+		return null;
+	}
+
+	/**
+	 * Every library jar the version JSON names that is actually on disk, natives and sources left out.
+	 * {@code null} when there is no version JSON, so a caller can keep its own fallback.
+	 */
+	public static List<Path> minecraftLibraries() throws IOException {
+		return minecraftLibraries(librariesDir(), mcVersion());
+	}
+
+	static List<Path> minecraftLibraries(Path libraries, String mcVersion) throws IOException {
+		Path json = versionJson(libraries, mcVersion);
+		if (!Files.isRegularFile(json)) return null;
+		List<Path> out = new ArrayList<>();
+		Matcher matcher = Pattern.compile("\"path\"\\s*:\\s*\"([^\"]+\\.jar)\"").matcher(Files.readString(json));
+		while (matcher.find()) {
+			String relative = matcher.group(1);
+			String name = relative.substring(Math.max(relative.lastIndexOf('/'), relative.lastIndexOf('\\')) + 1);
+			if (name.contains("natives") || name.contains("sources")) continue;
+			Path file = libraries.resolve(relative);
+			if (Files.isRegularFile(file)) out.add(file);
+		}
+		return out;
+	}
+
+	private static Path newestJar(Path under) throws IOException {
+		if (!Files.isDirectory(under)) return null;
+		try (var stream = Files.walk(under)) {
+			return stream.filter(path -> {
+				String name = path.getFileName().toString();
+				return name.endsWith(".jar") && !name.contains("sources") && !name.contains("natives");
+			}).max(Comparator.comparing(path -> path.getFileName().toString())).orElse(null);
+		}
 	}
 
 	/** The Fabric API build the real-bytecode tests are written against. */

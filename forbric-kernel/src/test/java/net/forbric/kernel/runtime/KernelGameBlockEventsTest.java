@@ -259,11 +259,16 @@ class KernelGameBlockEventsTest {
 		List<URL> urls = new ArrayList<>(List.of(compiled.toUri().toURL(), merged.toUri().toURL(),
 				forgeRt.toUri().toURL(), neoRt.toUri().toURL()));
 		// The game's own libraries too: TriState holds a Codec, so translating one decision links DataFixerUpper.
-		Path libraries = TestFixtures.minecraftDir().resolve("libraries");
-		if (Files.isDirectory(libraries)) {
-			try (java.util.stream.Stream<Path> jars = Files.walk(libraries)) {
-				for (Path jar : jars.filter(f -> f.toString().endsWith(".jar")).toList()) {
-					urls.add(jar.toUri().toURL());
+		List<Path> listed = TestFixtures.minecraftLibraries();
+		if (listed != null) {
+			for (Path jar : listed) urls.add(jar.toUri().toURL());
+		} else {
+			Path libraries = TestFixtures.librariesDir();
+			if (Files.isDirectory(libraries)) {
+				try (java.util.stream.Stream<Path> jars = Files.walk(libraries)) {
+					for (Path jar : jars.filter(f -> f.toString().endsWith(".jar")).toList()) {
+						urls.add(jar.toUri().toURL());
+					}
 				}
 			}
 		}

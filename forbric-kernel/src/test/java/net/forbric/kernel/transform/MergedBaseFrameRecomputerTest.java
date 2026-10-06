@@ -263,16 +263,9 @@ class MergedBaseFrameRecomputerTest {
 		return new GameLoader(urls);
 	}
 
-	/** The same library tree {@code build.gradle} resolves brigadier and fastutil from. */
+	/** The same library the game-side compile reads: the version JSON's copy, not the name that sorts last. */
 	private static Path newestUnder(String artifact) throws IOException {
-		String configured = System.getProperty("forbric.mcLibraries");
-		Path root = (configured != null ? Path.of(configured) : TestFixtures.minecraftDir().resolve("libraries"))
-				.resolve(artifact);
-		if (!Files.isDirectory(root)) return null;
-		try (var found = Files.walk(root)) {
-			return found.filter(f -> f.getFileName().toString().endsWith(".jar")).sorted()
-					.reduce((a, b) -> b).orElse(null);
-		}
+		return TestFixtures.minecraftLibrary(artifact);
 	}
 
 

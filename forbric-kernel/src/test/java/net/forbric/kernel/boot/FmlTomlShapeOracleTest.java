@@ -384,14 +384,7 @@ class FmlTomlShapeOracleTest {
 	}
 
 	private static Path newestGuava() throws IOException {
-		Path root = TestFixtures.minecraftDir().resolve("libraries");
-		Path under = root.resolve("com/google/guava/guava");
-		if (!Files.isDirectory(under)) return null;
-		try (var stream = Files.walk(under)) {
-			return stream.filter(f -> f.toString().endsWith(".jar") && !f.toString().contains("sources"))
-					.sorted(java.util.Comparator.comparing(f -> f.getFileName().toString()))
-					.reduce((a, b) -> b).orElse(null);
-		}
+		return TestFixtures.minecraftLibrary("com/google/guava/guava");
 	}
 
 	/** The FML's own wrapper — both are constructed over a parsed config, exactly as their ModFileParser does. */

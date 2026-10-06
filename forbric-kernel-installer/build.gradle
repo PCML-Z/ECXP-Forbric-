@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'net.forbric'
-version = '0.11'
+version = '0.1.3'
 
 java {
 	sourceCompatibility = JavaVersion.VERSION_17
@@ -154,7 +154,24 @@ tasks.register('bundleForbric') {
 		// dead weight that the installed profile then lists as a library nothing provides — an accidental fallback
 		// for a missing Fabric Loader AFI. The merge tools still come from ../forbric-loader, which is a build-time
 		// tool rather than a shipped artifact.
-		add('net.forbric:forbric-kernel:' + project.version, new File(kernelDir, "build/libs/${kernelJar()}"))
+		def kernelFile = new File(kernelDir, "build/libs/${kernelJar()}")
+		add('net.forbric:forbric-kernel:' + project.version, kernelFile)
+		// A boot-only kernel jar is a legal CI artifact: compileRuntimeJava is skipped when the staged game jars
+		// are absent, and the nest is omitted on purpose. It is not a legal player installer. The first 0.10
+		// upload was that jar, and the installed profile died on the missing forbric-kernel-runtime.jar.
+		def nestedRuntime = 'META-INF/jars/forbric-kernel-runtime.jar'
+		def kernelZip = new java.util.zip.ZipFile(kernelFile)
+		try {
+			def nested = kernelZip.getEntry(nestedRuntime)
+			if (nested == null || nested.size < 1024) {
+				throw new GradleException("${kernelFile.name} has no ${nestedRuntime}. " +
+						"Rebuild the kernel where the staged merged base is present " +
+						"(python3 tools/dev.py prepare) before building the player installer. " +
+						"The boot-only jar is not what gets published.")
+			}
+		} finally {
+			kernelZip.close()
+		}
 
 		// The kernel's own third-party dependencies, taken from the classpath the kernel itself reports so the
 		// installed profile cannot drift from what the gates run. All permissively licensed; staged locally so a

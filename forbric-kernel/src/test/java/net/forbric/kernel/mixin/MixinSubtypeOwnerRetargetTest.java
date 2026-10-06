@@ -79,10 +79,8 @@ class MixinSubtypeOwnerRetargetTest {
 	}
 
 	@Test void codecDoesNotRedeclareParse() throws Exception {
-		Path dfu = TestFixtures.minecraftDir().resolve("libraries/com/mojang/datafixerupper");
-		TestFixtures.require(Fixture.MC_LIBRARIES, Files.isDirectory(dfu), "Minecraft's DataFixerUpper required");
-		Path jar;
-		try (var files = Files.walk(dfu)) { jar = files.filter(p -> p.toString().endsWith(".jar")).sorted().reduce((a, b) -> b).orElseThrow(); }
+		Path jar = TestFixtures.minecraftLibrary("com/mojang/datafixerupper");
+		TestFixtures.require(Fixture.MC_LIBRARIES, jar != null, "Minecraft's DataFixerUpper required");
 		try (ZipFile zip = new ZipFile(jar.toFile())) {
 			ClassNode codec = MixinFit.parse(zip.getInputStream(zip.getEntry("com/mojang/serialization/Codec.class")).readAllBytes());
 			assertTrue(codec.interfaces.contains("com/mojang/serialization/Decoder"));
