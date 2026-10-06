@@ -633,8 +633,20 @@ java -cp <boot-cp> net.forbric.kernel.boot.Main --scan --mods <dir> --report out
 - **合并基底是 NeoForge 的游戏，再拼进 MinecraftForge。** 两边都打过补丁的方法只保留了一个方法体（已提交的报告里有 1000 处方法冲突）；落败一方的 mod 因此丢掉的东西逐个修复 —— 转换器、适配器、桥 —— 没修复的由 `DeadEventAudit`、`HookCallSiteCensus`、`FieldDriftAudit`、`AbiLinkAudit`、`CapabilityUseAudit` 报告。结构性冲突（`Entity` 有两个真正的父类）在字节码层面无解；MinecraftForge 的 capability 由转换器重新组合进来。
 - **`PARTIAL` 的 mixin 默认应用** —— 宁可保留只应用了一半的结果（并让它可见），也不丢掉还能工作的钩子。
 - **一个类，一份副本。** 同一个 mod 的两个生态构建相互竞争时，只有一个胜出；落败的生态看到的是在场别名，而不是该 mod 自己的平台胶水代码。
-- **靠实测，不靠承诺。** `MOD_TEST_FAILURES.md` 记录了针对当前 `main` 代码的逐 mod 测试（每个 jar 只带上它必需的依赖单独运行，进入世界、截图、退出），用的是三组全新随机抽取的 Modrinth mod：平均 89.0% 加载时没有失败行（91.8% 进入了世界；79.1% 在加载报告里没有任何一项被标为 DEGRADED），而同一批 jar 在发布版 v0.2.0 上是 80.5%。
-- **版本。** `forbric-kernel/build.gradle` 写的是 `0.1.0-SNAPSHOT`；安装器是 `0.2`，只接受 Minecraft 26.2。`net.forbric.api` 是内部 API，随时可能变动，不另行通知。
+- **靠实测，不靠承诺 —— 但这个判据很松，数字要和判据一起读。** `MOD_TEST_FAILURES.md` 记录了针对当前 `main` 代码的逐 mod 测试（每个 jar 只带上它必需的依赖单独运行，进入世界、截图、退出），用的是三组全新随机抽取的 Modrinth mod：平均 89.0% 加载时没有失败行（91.8% 进入了世界；79.1% 在加载报告里没有任何一项被标为 DEGRADED），而同一批 jar 在发布版 v0.2.0 上是 80.5%。一次"通过"到底要求了什么，以及这个数字**没有**说什么：
+
+  | 通过要求了什么 | 它没有覆盖什么 |
+  |---|---|
+  | 进了世界、正常退出。 | mod 的任何功能是否可用。没有一项功能被真正用过。 |
+  | 画面画出来了 —— `run/compat/frame-verdict.py` 把截图缩到 64 像素，缩略图超过 2 种颜色就算 `DREW`。 | 只画了一片天空、别的什么都没做的 mod 也是通过。 |
+  | 日志里没有点名这个 mod 的入口失败、`@Mod` 构造失败或 mixin 应用失败。 | 以别的形式暴露的问题 —— 包括被标成 `DEGRADED` 的那些。 |
+  | 每个 jar **单独**跑，只带必需的依赖。 | mod 之间的组合。混装是另一组弱得多的结果。 |
+
+  还有两点会改变这个头条数字的读法：
+
+  - **DEGRADED 算通过。** 一个加载了但有一部分没生效的 mod —— 入口没跑、mixin 只应用了一半 —— 也算在那 89.0% 里，只被标成 DEGRADED。把这类排除掉的口径是 79.1%。
+  - **分母是 jar，不是内容 mod。** 每批（110 / 97 / 104）把必需的依赖也算了进去，所以纯库、纯 API、纯数据包 jar 和真正的 mod 并列在同一个分母里。89.0% 不等于"你会坐下来玩的 mod 里有 89% 能用"。
+- **版本。** `forbric-kernel/build.gradle` 写的是 `0.1.0-SNAPSHOT`；安装器是 `0.30`，只接受 Minecraft 26.2。`net.forbric.api` 是内部 API，随时可能变动，不另行通知。
 
 ## 20. 延伸阅读
 

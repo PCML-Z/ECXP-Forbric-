@@ -31,7 +31,7 @@ ECXP-Forbric+ 是 Forbric 的增强分支，不是把内核推倒重写。整理
 | `transform` | 合并基底上的字节码修复。`ForbricMergedBaseCompatTransformer` 保持顺序和声明，具体修复在 `MergedBase*Repair` |
 | `mixin` | 把写给原版或某一加载器的 mixin 挪到合并后的方法上，并对不上的记下来 |
 | `fabric` | Fabric Loader API 的实现。Fabric Loader 本身不运行 |
-| `interop` | Fabric、Forge、NeoForge 之间的物品、流体、能量和网络 |
+| `interop` | 供客方字节码反射调用的着陆点：`PayloadInterop`（自定义包的编解码与分发，分 Fabric API / MinecraftForge / NeoForge 三路）、`ClientShutdown`、`ForgeRuntimeInterop`（Forge/NeoForge 的 `FluidType` ABI 分叉）。**物品、流体、能量的跨生态传输不在这个包**，在 `src/runtime` 的 `runtime/transfer/`（`KernelTransferInterop` + `runtime/transfer/`），且只在相关 API 实际存在时启用 |
 | `metadata` | 读取三种生态的 mod 清单 |
 | `classloading` | 内核自己的类加载器 |
 | `discovery` | 找出 `mods` 里的 jar，并判断它属于哪一家 |

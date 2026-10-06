@@ -130,16 +130,26 @@ class RegistryWrapperAccessInjectorTest {
 		try (Game merged = new Game(Wrappers.AS_SHIPPED, null)) {
 			IllegalAccessException refused = assertThrows(IllegalAccessException.class, () -> merged.lookUpAndInvoke("getOptional", "diamond_ore"),
 					"control: as the carrier ships it, the lookup is refused");
-			assertEquals("class " + Game.class.getName() + " cannot access a member of class net.minecraftforge.registries.NamespacedWrapper "
-					+ "with modifiers \"public\"", refused.getMessage(), "the message Meow Anti-Xray's crash report carried");
-			assertTrue(assertThrows(IllegalAccessException.class, () -> merged.lookUpAndInvoke("getValue", "diamond_ore")).getMessage()
-					.contains("a member of class net.minecraftforge.registries.NamespacedDefaultedWrapper with modifiers \"public\""));
+			// Names and access, not the JDK's sentence: Reflection spelled the reason `with modifiers "public"` up to
+			// JDK 17 and `with public access` from 18 on, and pinning that wording made a JDK upgrade look like a
+			// regression in this injector. The crash report this reproduces said the same thing either way.
+			assertRefused(refused, "net.minecraftforge.registries.NamespacedWrapper");
+			assertRefused(assertThrows(IllegalAccessException.class, () -> merged.lookUpAndInvoke("getValue", "diamond_ore")),
+					"net.minecraftforge.registries.NamespacedDefaultedWrapper");
 		}
 		try (Game repaired = new Game(Wrappers.ACCESS_ONLY, null)) {
 			assertEquals(Optional.of("diamond ore"), repaired.lookUpAndInvoke("getOptional", "diamond_ore"));
 			assertEquals(Optional.empty(), repaired.lookUpAndInvoke("getOptional", "not_a_block"));
 			assertEquals("diamond ore", repaired.lookUpAndInvoke("getValue", "diamond_ore"));
 		}
+	}
+
+	/** The refusal names the caller and the class it could not reach, and the member it wanted was public. */
+	private static void assertRefused(IllegalAccessException refused, String target) {
+		String message = String.valueOf(refused.getMessage());
+		assertTrue(message.contains("class " + Game.class.getName() + " cannot access a member of class " + target),
+				"the refusal must name the calling class and the class it could not reach, whatever the JDK's wording: " + message);
+		assertTrue(message.contains("public"), "the refused member is public; only the CLASS is package-private: " + message);
 	}
 
 	/**

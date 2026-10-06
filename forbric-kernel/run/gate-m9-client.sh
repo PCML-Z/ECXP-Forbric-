@@ -395,6 +395,15 @@ step "the pack is honestly provisioned (must PASS)"
 # value is now "none" — and keeping the assertion, rather than deleting it with the finding, is the point. It
 # fails in both directions: a mod whose range outruns the carrier turns it red, and so does silently sliding
 # the carrier back. Anything appearing here must be a decision, not a surprise.
+#
+# The Forge half of this was STRUCTURALLY SILENT until 2026-10-06 and never contributed an entry, so an empty
+# result did not previously mean the Forge ranges had been checked. The MinecraftForge carrier's mods.toml ships
+# version="${global.forgeVersion}" unsubstituted, and an unresolved placeholder is rightly not a version, so
+# `EcosystemVersions` declined to judge and every `forge` versionRange went unevaluated — Classic Pipes requires
+# forge [65.0.9,) and the carrier is 65.0.1, which a genuine MinecraftForge refuses and Forbric loaded. The
+# number is in the same jar's MANIFEST.MF (Implementation-Title: MinecraftForge, Implementation-Version:
+# 65.0.1), and `EcosystemVersions.manifestVersion` now reads it as the fallback. A Forge mod appearing here from
+# now on is a real finding, not a regression.
 check "ecosystem versions reported"   "Forbric/Versions\] this instance provides"                "$LOG"
 UNDERPROVISIONED=$(grep -aoE 'Forbric/Versions\] [a-z0-9_]+ requires' "$LOG" \
   | sed -E 's/.*\] ([a-z0-9_]+) requires/\1/' | sort -u | paste -sd, -)

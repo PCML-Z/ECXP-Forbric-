@@ -191,14 +191,27 @@ class RegistryWrapperAccessInjectorExecutionTest {
 		ClassLoader merged = game(compiled, false);
 		IllegalAccessException refused = assertThrows(IllegalAccessException.class, () -> findBlockById(merged, blocks(merged, true)),
 				"control: as the carrier ships the wrappers, invoking a public method found on one is refused");
-		assertEquals("class " + MOD + " cannot access a member of class " + WRAPPER + " with modifiers \"public\"", refused.getMessage());
+		assertRefusedByPackagePrivateClass(refused, MOD, WRAPPER);
 
 		ClassLoader repaired = game(compiled, true);
 		assertEquals(Optional.of("diamond ore"), findBlockById(repaired, blocks(repaired, true)));
 		// A method the defaulted wrapper declares itself is refused on its own class, not NamespacedWrapper's.
-		assertTrue(assertThrows(IllegalAccessException.class, () -> defaultKey(merged, blocks(merged, true))).getMessage()
-				.contains("a member of class " + DEFAULTED_WRAPPER + " with modifiers \"public\""));
+		assertRefusedByPackagePrivateClass(assertThrows(IllegalAccessException.class,
+				() -> defaultKey(merged, blocks(merged, true))), MOD, DEFAULTED_WRAPPER);
 		assertEquals("Identifier[namespace=minecraft, path=air]", String.valueOf(defaultKey(repaired, blocks(repaired, true))));
+	}
+
+	/**
+	 * The refusal names the caller and the class it could not reach. The JDK's wording for WHY it was refused is not
+	 * asserted: {@code Reflection.newIllegalAccessException} spells it {@code with modifiers "public"} up to JDK 17 and
+	 * {@code with public access} from 18 on, so pinning the sentence turned a JDK upgrade into a red suite that said
+	 * nothing about this injector. The two names and the {@code public} access are the parts that carry the meaning.
+	 */
+	private static void assertRefusedByPackagePrivateClass(IllegalAccessException refused, String caller, String target) {
+		String message = String.valueOf(refused.getMessage());
+		assertTrue(message.contains("class " + caller + " cannot access a member of class " + target),
+				"the refusal must name the calling class and the class it could not reach, whatever the JDK's wording: " + message);
+		assertTrue(message.contains("public"), "the refused member is public; only the CLASS is package-private: " + message);
 	}
 
 	/** Only the class header changes: the mod still cannot build a wrapper, and Forge's package-private members stay so. */

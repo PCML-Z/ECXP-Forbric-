@@ -25,9 +25,14 @@ def ci_bullet(document):
 class CiContractTest(unittest.TestCase):
     def test_docs_name_the_command_the_kernel_job_runs(self):
         command = kernel_command((ROOT / '.github/workflows/build.yml').read_text(encoding='utf-8'))
-        for name in ('introduction.md', 'introduction.zh-CN.md'):
+        # Under docs/, since the layout split moved them there (d5d0f19). Naming the bare file name here read a path
+        # that no longer exists, and the contract this test exists to enforce has been unenforced since: a missing
+        # file raised FileNotFoundError inside subTest, which is an error rather than the failure it looks like.
+        for name in ('docs/introduction.md', 'docs/introduction.zh-CN.md'):
             with self.subTest(document=name):
-                bullet = ci_bullet((ROOT / name).read_text(encoding='utf-8'))
+                document = ROOT / name
+                self.assertTrue(document.is_file(), f'{name} is missing; the CI contract has nothing to check')
+                bullet = ci_bullet(document.read_text(encoding='utf-8'))
                 self.assertIn(f'`{command}`', bullet, f'{name} describes CI with a command build.yml does not run')
 
     def test_the_contract_can_tell_a_stale_description(self):

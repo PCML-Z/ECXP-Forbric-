@@ -22,12 +22,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
@@ -262,9 +264,14 @@ class GameEventBridgeInventoryTest {
 	@Test
 	void everyLatePassBridgeIsRecordedByTheTransformerThatLandsIt() throws Exception {
 		Set<String> recorded = new java.util.LinkedHashSet<>();
-		for (String transformer : List.of("ForbricMergedBaseCompatTransformer", "ForgeBlockTintInjector",
-				"ForgeCreativeTabsInjector", "ForgeSpawnPlacementsInjector")) {
-			recorded.addAll(bridgesRecordedBy(compiled("transform", transformer)));
+		// Every compiled class in the transform package, not a hand-listed few of them. A named list is a list that
+		// goes stale the moment a repair moves into its own file: the CLIENT_INIT hooks and the particle providers were
+		// written by ForbricMergedBaseCompatTransformer until MergedBaseClientRepair took them, and this scan kept
+		// naming only the transformer, so both bridges read as unrecorded on a tree where they were recorded correctly.
+		// A bridge can only be recorded in this package or on the game side, so scanning the whole package is the
+		// same coverage with no list to maintain.
+		for (Path transformer : compiledClassesIn("transform")) {
+			recorded.addAll(bridgesRecordedBy(transformer));
 		}
 		// A transformer may land only the SEAM and leave the recording to the game-side class it routes to — which
 		// is the honest place for it when the install can still fail after the redirect is in the bytecode.
@@ -286,6 +293,16 @@ class GameEventBridgeInventoryTest {
 		assertEquals(List.of(), missing,
 				"every late-pass bridge must be passed to EventBridges.installed by the transformer that lands its "
 						+ "redirect, or the verify line reports it missing on every boot");
+	}
+
+	/** Every compiled class in a boot-side source set's package, top level. */
+	private static List<Path> compiledClassesIn(String pkg) throws IOException {
+		Path root = Path.of(System.getProperty("user.dir"), "build", "classes", "java", "main",
+				"net", "forbric", "kernel", pkg);
+		if (!Files.isDirectory(root)) return List.of();
+		try (Stream<Path> found = Files.list(root)) {
+			return found.filter(p -> p.getFileName().toString().endsWith(".class")).sorted().toList();
+		}
 	}
 
 	/** A class from the GAME-side output set, which links against the carriers and so compiles separately. */

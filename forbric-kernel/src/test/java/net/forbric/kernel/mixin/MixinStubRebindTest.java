@@ -13,7 +13,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.objectweb.asm.ClassReader;
@@ -681,7 +680,7 @@ class MixinStubRebindTest {
 	/** The installed Language Reload jar, not the miniature: its handler branches and calls loadFromJson twice. */
 	@Test void theInstalledLanguageReloadRedirectForwardsTheComponentConsumer() throws Exception {
 		Path jar = Path.of(System.getProperty("user.home"), ".pmcl/instances/26.2-ecxp-forbric/mods/language-reload-1.7.7+26.2.jar");
-		Assumptions.assumeTrue(Files.isRegularFile(jar), "language reload is not installed in the 26.2 instance");
+		TestFixtures.require(Fixture.THIRD_PARTY, Files.isRegularFile(jar), "language reload is not installed in the 26.2 instance");
 		ClassNode client = merged("net/minecraft/client/resources/language/ClientLanguage");
 		ClassNode mixin = new ClassNode();
 		try (ZipFile zip = new ZipFile(jar.toFile())) {

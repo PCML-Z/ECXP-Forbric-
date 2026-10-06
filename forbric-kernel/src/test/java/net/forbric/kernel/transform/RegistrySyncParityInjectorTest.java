@@ -94,15 +94,41 @@ class RegistrySyncParityInjectorTest {
 	}
 
 	@Test
-	void theRealPendingTagsClassGainsAVerifiableContents() throws Exception {
+	void theRealPendingTagsClassAnswersThePendingTagsContract() throws Exception {
 		byte[] in = realBytes(WRAPPER_PENDING_TAGS);
 
 		byte[] out = injector.transform(WRAPPER_PENDING_TAGS, in, ctx());
-		assertTrue(out != in, "the pending-tags contract was not added");
 
+		// The contract, not the edit, is what has to be there afterwards. A carrier that already declares contents()
+		// is handed back untouched by design — the injector's own anchor ledger calls that the healthy answer, since
+		// Forge shipped contents() before NeoForge's interface asked for it — so asserting out != in tested a
+		// particular carrier's history rather than the invariant, and went red on the 26.2 carrier, which has it.
 		MethodNode contents = method(parse(out), "contents", "()Ljava/util/Map;");
 		assertNotNull(contents, "contents()Ljava/util/Map; missing — NeoForge's condition context calls exactly this");
+		assertEquals(Opcodes.ACC_PUBLIC, contents.access & Opcodes.ACC_PUBLIC,
+				"NeoForge calls it through the interface, so a package-private contents() is not the contract");
+		// And it has to answer with the map Forge already fills. An empty map would be the same signature and would
+		// tell the condition context that a datapack's tags are empty when they are not.
+		assertTrue(readsPendingBindings(contents),
+				"contents() must return val$newBindings; anything else misreports the pending tags");
 		new Analyzer<>(new BasicVerifier()).analyze(parse(out).name, contents);
+	}
+
+	/** Whether {@code method} is the plain {@code return this.val$newBindings;} the injector writes, carrier-shipped or not. */
+	private static boolean readsPendingBindings(MethodNode method) {
+		org.objectweb.asm.tree.FieldInsnNode field = null;
+		for (org.objectweb.asm.tree.AbstractInsnNode insn : method.instructions.toArray()) {
+			if (insn instanceof org.objectweb.asm.tree.VarInsnNode load && load.getOpcode() == Opcodes.ALOAD && load.var == 0) {
+				field = null;
+			} else if (insn instanceof org.objectweb.asm.tree.FieldInsnNode read) {
+				field = read;
+			} else if (insn.getOpcode() == Opcodes.ARETURN) {
+				break;
+			} else {
+				return false;
+			}
+		}
+		return field != null && "val$newBindings".equals(field.name) && "Lcom/google/common/collect/ImmutableMap;".equals(field.desc);
 	}
 
 	/** The other half of the same class pair: the wrapper itself has to answer to BOTH ecosystems' remap contracts. */

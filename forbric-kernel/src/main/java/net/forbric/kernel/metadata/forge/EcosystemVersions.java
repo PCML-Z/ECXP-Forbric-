@@ -21,6 +21,8 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.jar.Attributes;
+import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -115,6 +117,42 @@ public final class EcosystemVersions {
 		return version;
 	}
 
+	/**
+	 * The version the carrier jar says it IS, from its own manifest — the fallback for a {@code mods.toml} whose
+	 * version was never substituted.
+	 *
+	 * <p>WHY THE FALLBACK IS NOT A GUESS. The MinecraftForge carrier ships {@code version="${global.forgeVersion}"}
+	 * verbatim, so {@link #usableVersion} declines it and the Forge half of this audit had no version to judge
+	 * against — which made it silent for EVERY Forge mod's range, not just the honest ones. Silence read as health,
+	 * and the gate that pins the findings to empty passed for the wrong reason. The number is not missing, only the
+	 * toml's copy of it: the same jar's manifest carries {@code Implementation-Title: MinecraftForge} and
+	 * {@code Implementation-Version: 65.0.1}, which is what a genuine MinecraftForge reports as {@code forge}'s
+	 * version. Reading that is reporting the jar's own identity, not inventing one.
+	 *
+	 * <p>Only the MAIN section is read. Every bundled library has a {@code Name: <package>/} section of its own, and
+	 * those run into the hundreds in a carrier — the first section's {@code Implementation-Version} is the only one
+	 * that describes this jar. A jar whose main section is absent or carries no {@code Implementation-Title} still
+	 * declines: a version with no title beside it cannot be attributed, and an unattributable version is what
+	 * {@link #usableVersion} exists to refuse.
+	 */
+	private static String manifestVersion(Path jar) {
+		try (ZipFile zip = new ZipFile(jar.toFile())) {
+			ZipEntry entry = zip.getEntry("META-INF/MANIFEST.MF");
+			if (entry == null) return null;
+			Manifest manifest;
+			try (InputStream in = zip.getInputStream(entry)) {
+				manifest = new Manifest(in);
+			}
+			Attributes main = manifest.getMainAttributes();
+			if (main.getValue("Implementation-Title") == null) return null;
+			return usableVersion(main.getValue("Implementation-Version"));
+		} catch (Throwable unreadable) {
+			ForbricLog.debug("[Forbric/Versions] could not read the manifest of %s: %s", jar.getFileName(),
+					String.valueOf(unreadable));
+			return null;
+		}
+	}
+
 	private static void readInto(Path jar, String manifestPath) {
 		try (ZipFile zip = new ZipFile(jar.toFile())) {
 			ZipEntry entry = zip.getEntry(manifestPath);
@@ -128,15 +166,41 @@ public final class EcosystemVersions {
 				if (!ECOSYSTEMS.contains(mod.getModId())) continue;
 
 				String version = usableVersion(mod.getVersion());
+				boolean fromManifest = false;
+				if (version == null) {
+					// The toml's copy is unusable; the jar's own manifest is the second source, used only here.
+					version = manifestVersion(jar);
+					fromManifest = version != null;
+				}
 				if (version == null) continue;
+				String resolved = version;
 				synchronized (PROVIDED) {
-					PROVIDED.putIfAbsent(mod.getModId(), version);
+					boolean first = !PROVIDED.containsKey(mod.getModId());
+					PROVIDED.putIfAbsent(mod.getModId(), resolved);
+					if (first && fromManifest) {
+						ForbricLog.info("[Forbric/Versions] %s is %s, read from the manifest of %s because %s "
+								+ "declares the unsubstituted placeholder %s", mod.getModId(), resolved,
+								jar.getFileName(), manifestPath, mod.getVersion());
+					}
 				}
 			}
 		} catch (Throwable unreadable) {
 			ForbricLog.debug("[Forbric/Versions] could not read %s from %s: %s", manifestPath, jar.getFileName(),
 					String.valueOf(unreadable));
 		}
+	}
+
+	/**
+	 * Whether this instance satisfies {@code range} for {@code modId}.
+	 *
+	 * <p>True also when no version was recorded for {@code modId}: an ecosystem we do not claim to provide is not
+	 * ours to judge, and judging it against a guess is the one thing worse than judging nothing. So a {@code true}
+	 * here means "no complaint", not "verified".
+	 */
+	static boolean accepts(String modId, String range) {
+		String have = provided(modId);
+		if (have == null) return true;
+		return ForgeVersionRange.satisfies(range, have);
 	}
 
 	/**
@@ -153,7 +217,7 @@ public final class EcosystemVersions {
 
 				String have = provided(dep.getModId());
 				if (have == null) continue; // not an ecosystem we claim to provide — not ours to judge
-				if (ForgeVersionRange.satisfies(dep.getVersionRange(), have)) continue;
+				if (accepts(dep.getModId(), dep.getVersionRange())) continue;
 
 				ForbricLog.warn("[Forbric/Versions] %s requires %s %s but this instance provides %s (%s) — it is "
 						+ "being loaded anyway, and a genuine loader would have refused; expect it to fail on "

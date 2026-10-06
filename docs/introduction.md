@@ -1272,11 +1272,28 @@ Break one and the failure usually surfaces far from the cause.
   hooks.
 - **One class, one copy.** When two ecosystems' builds of a mod compete, one wins; the losing ecosystem sees a
   presence alias, not the mod's own platform glue.
-- **Measured, not promised.** `MOD_TEST_FAILURES.md` records a per-mod test (each jar alone with its required
-  dependencies, into a world, screenshot, exit) on three fresh random Modrinth sets against the current `main`
-  code: 89.0 % loaded without failure lines on average (91.8 % reached the world; 79.1 % with nothing reported
-  DEGRADED in the load report), against 80.5 % for release v0.2.0 on the same jars.
-- **Versions.** `forbric-kernel/build.gradle` says `0.1.0-SNAPSHOT`; the installer is `0.2` and accepts Minecraft 26.2 only. `net.forbric.api`
+- **Measured, not promised — and the bar is low, so read the bar with the number.** `MOD_TEST_FAILURES.md` records
+  a per-mod test (each jar alone with its required dependencies, into a world, screenshot, exit) on three fresh
+  random Modrinth sets against the current `main` code: 89.0 % loaded without failure lines on average (91.8 %
+  reached the world; 79.1 % with nothing reported DEGRADED in the load report), against 80.5 % for release v0.2.0
+  on the same jars. What one pass actually required, and therefore what the number does **not** say:
+
+  | What the pass criterion was | What it does not cover |
+  |---|---|
+  | The run reached a world and exited normally. | Whether anything the mod does works. No feature is exercised. |
+  | A frame was drawn — `run/compat/frame-verdict.py` scales the screenshot to 64 px and calls it `DREW` when the thumbnail has more than 2 distinct colours. | A mod that drew a plain sky and did nothing else is a pass. |
+  | The log has no entry-failure, `@Mod` construction-failure or mixin-apply-failure line naming that mod. | Faults that surface any other way — including as a `DEGRADED` row. |
+  | The mod is one jar run **alone**, with only its required dependencies. | Mods together. Combination failures are a separate, much weaker result. |
+
+  Two further caveats that change how the headline reads:
+
+  - **DEGRADED counted as a pass.** A mod that loaded with part of itself not working — an entrypoint that never
+    ran, a mixin applied half — is in the 89.0 %, marked DEGRADED and nothing more. The figure that excludes them
+    is 79.1 %.
+  - **The denominator is jars, not content mods.** Each batch (110 / 97 / 104) counts required dependencies, so
+    library-only, API-only and datapack-only jars sit in it next to real ones. 89.0 % is not "89 % of the mods you
+    would sit down and play work".
+- **Versions.** `forbric-kernel/build.gradle` says `0.1.0-SNAPSHOT`; the installer is `0.30` and accepts Minecraft 26.2 only. `net.forbric.api`
   is internal and changes without notice.
 
 ## 20. Further reading
