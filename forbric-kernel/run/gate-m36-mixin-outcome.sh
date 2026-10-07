@@ -28,7 +28,7 @@ for phase,mode,policy,required in [('required-strict','required','strict',True),
  (results/(phase+'.log')).unlink(missing_ok=True)  # the lost-port check below must not read an earlier run's log
  with (results/(phase+'-driver.log')).open('w') as output:
   process=subprocess.Popen(command,cwd=root,env=env,stdin=subprocess.DEVNULL,stdout=output,stderr=subprocess.STDOUT,start_new_session=True)
-  try:code=process.wait(timeout=180)
+  try:process.wait(timeout=180)
   except subprocess.TimeoutExpired:
    os.killpg(process.pid,signal.SIGTERM)
    try:process.wait(timeout=15)
@@ -37,13 +37,21 @@ for phase,mode,policy,required in [('required-strict','required','strict',True),
  log=results/(phase+'.log')
  # A lost port fails everything below for a reason that is not the kernel's (see port_was_free in lib.sh).
  assert not (log.is_file() and 'FAILED TO BIND TO PORT' in log.read_text(errors='replace')),(phase,f'the server never got port {port}: another process holds it')
- assert code==0,(phase,'server/evidence failed; inspect driver log')
+ # evidence.py exits 1 whenever the command it ran did not exit 0, so ITS return code cannot answer the only
+ # question this gate asks here: did the server end the way this phase is FOR? Read the exit code evidence.py
+ # recorded instead. Two of the six phases exist precisely to prove the compatibility policy refuses the launch,
+ # and a refusal ends in CompatibilityLaunchBoundary.POLICY_STOP (78) by design -- demanding 0 made
+ # 'required-strict' unpassable, and with it the first phase every later phase is compared against.
+ strict=required and policy=='strict'
+ outcome=json.loads((results/(phase+'.result.json')).read_text())
+ assert outcome['inputsUnchanged'],(phase,'an input artifact changed under the run')
+ expected=78 if strict else 0
+ assert outcome['exitCode']==expected,(phase,f'server exited {outcome["exitCode"]}, expected {expected}')
  text=(results/(phase+'.log')).read_text();report=json.loads((run/'.forbric-kernel/compatibility-report.json').read_text())
  shutil.copy2(run/'.forbric-kernel/compatibility-report.json',results/(phase+'-compatibility.json'))
  assert 'Done (' in text and '[M36Outcome] first live tick complete' in text,(phase,'target was not reached in the real running server')
  losses=[f for f in report['findings'] if f['id'].startswith('mixin-injector:') and f['modId']=='forbricoutcome' and f['confidence']=='CONFIRMED' and f['required']]
  assert bool(losses)==required,(phase,report)
- strict=required and policy=='strict'
  assert ('reached third tick' in text) is (not strict),(phase,'late policy did not take effect at the next boundary')
  assert ('completed-tick boundary' in text) is strict,(phase,'safe halt evidence differs')
  assert 'All dimensions are saved' in text and 'Preparing crash report' not in text,(phase,'not a normal saved shutdown')
