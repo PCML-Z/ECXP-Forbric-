@@ -49,16 +49,28 @@ for phase,mode,policy,required in [('required-strict','required','strict',True),
  assert outcome['exitCode']==expected,(phase,f'server exited {outcome["exitCode"]}, expected {expected}')
  text=(results/(phase+'.log')).read_text();report=json.loads((run/'.forbric-kernel/compatibility-report.json').read_text())
  shutil.copy2(run/'.forbric-kernel/compatibility-report.json',results/(phase+'-compatibility.json'))
- assert 'Done (' in text and '[M36Outcome] first live tick complete' in text,(phase,'target was not reached in the real running server')
  losses=[f for f in report['findings'] if f['id'].startswith('mixin-injector:') and f['modId']=='forbricoutcome' and f['confidence']=='CONFIRMED' and f['required']]
  assert bool(losses)==required,(phase,report)
- assert ('reached third tick' in text) is (not strict),(phase,'late policy did not take effect at the next boundary')
- assert ('completed-tick boundary' in text) is strict,(phase,'safe halt evidence differs')
- assert 'All dimensions are saved' in text and 'Preparing crash report' not in text,(phase,'not a normal saved shutdown')
  if required:assert len(losses)==1 and ('change' if mode=='widened' else 'missing') in losses[0]['id'],losses
- if mode=='widened':assert ('value=changed|context' if phase=='widened' else 'value=initial|context') in text,(phase,'argument result did not match')
- assert ('required present handler ran' in text)==(mode=='required')
- assert ('optional present handler ran' in text)==(mode=='optional')
+ if strict:
+  # Since 9fccb0c a mod that did not finish loading needs a decision like a FAILED one, so under STRICT the launch
+  # is refused WHILE THE MODS ARE LOADING -- there is no world to reach 'Done' in and no tick boundary to halt on.
+  # This gate used to require the opposite (a running server that stopped at the completed-tick boundary), which is
+  # unreachable now that DEGRADED refuses, and it failed on every run from that commit to this one. What is worth
+  # asserting here is the stronger property the refusal buys: nothing was created and no guest code ran.
+  assert '[M36Outcome] armed after server started' not in text,(phase,'the launch was refused, so the server must never have started')
+  assert 'Done (' not in text,(phase,'the launch was refused, so no world was reached')
+  assert 'completed-tick boundary' not in text,(phase,'a refused launch must not reach a tick boundary')
+  assert 'Preparing crash report' not in text,(phase,'a policy stop is not a crash')
+  assert 'required present handler ran' not in text and 'optional present handler ran' not in text,(phase,'no guest handler may run once the launch is refused')
+ else:
+  assert 'Done (' in text and '[M36Outcome] first live tick complete' in text,(phase,'target was not reached in the real running server')
+  assert 'reached third tick' in text,(phase,'the policy did not take effect at the next boundary')
+  assert 'completed-tick boundary' not in text,(phase,'a run that was allowed to continue must not halt at a boundary')
+  assert 'All dimensions are saved' in text and 'Preparing crash report' not in text,(phase,'not a normal saved shutdown')
+  assert ('required present handler ran' in text)==(mode=='required')
+  assert ('optional present handler ran' in text)==(mode=='optional')
+  if mode=='widened':assert ('value=changed|context' if phase=='widened' else 'value=initial|context') in text,(phase,'argument result did not match')
  print('[M36] PASS',phase,'real defaultRequire result and completed-tick policy',flush=True)
 print('[M36] GATE GREEN')
 PY
