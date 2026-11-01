@@ -43,6 +43,13 @@ public final class CompatibilityFindings {
 			// the same loss twice.
 			if (FINDINGS.values().stream().anyMatch(f -> f.modId().equals(entry.modId())
 					&& f.id().startsWith("metadata:") && f.confirmedRequired())) continue;
+			// A mixin the mod's own plugin declined leaves a RESOLVED finding (PluginDeclinedMixins.settle) while
+			// attribute() has already marked the row DEGRADED. Without this skip the same loss is counted twice:
+			// once as the discharged mixin finding and again as an initialization:degraded confirmation that the
+			// launch then refuses on. A resolved finding means no loss stands; do not promote the stale mark.
+			if (FINDINGS.values().stream().anyMatch(f -> f.modId().equals(entry.modId())
+					&& f.confidence() == CompatibilityFinding.Confidence.RESOLVED
+					&& f.id().startsWith("mixin:"))) continue;
 			for (CompatibilityFinding observed : initializationFindings(entry)) {
 				CompatibilityFinding prior = FINDINGS.get(observed.key());
 				if (prior != null && prior.confidence() == observed.confidence() && prior.required() == observed.required()
