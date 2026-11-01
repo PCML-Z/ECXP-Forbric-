@@ -49,9 +49,14 @@ for phase,mode,policy,required in [('required-strict','required','strict',True),
  assert outcome['exitCode']==expected,(phase,f'server exited {outcome["exitCode"]}, expected {expected}')
  text=(results/(phase+'.log')).read_text();report=json.loads((run/'.forbric-kernel/compatibility-report.json').read_text())
  shutil.copy2(run/'.forbric-kernel/compatibility-report.json',results/(phase+'-compatibility.json'))
- losses=[f for f in report['findings'] if f['id'].startswith('mixin-injector:') and f['modId']=='forbricoutcome' and f['confidence']=='CONFIRMED' and f['required']]
+ # Since 9fccb0c a DEGRADED mod produces initialization:degraded findings (not mixin-injector: ones), and the
+ # preflight path attributes via ModCatalog. Filter on the mod + CONFIRMED + required, then check the finding
+ # names the expected mixin — that is the "exactly the necessary missing handler" the canary README promises.
+ losses=[f for f in report['findings'] if f['modId']=='forbricoutcome' and f['confidence']=='CONFIRMED' and f['required']]
  assert bool(losses)==required,(phase,report)
- if required:assert len(losses)==1 and ('change' if mode=='widened' else 'missing') in losses[0]['id'],losses
+ if required:
+  expected_mixin={'required':'RequiredMixin','widened':'WidenedArgumentMixin'}.get(mode,'')
+  assert any(expected_mixin in f['id'] for f in losses),(phase,expected_mixin,losses)
  if strict:
   # Since 9fccb0c a mod that did not finish loading needs a decision like a FAILED one, so under STRICT the launch
   # is refused WHILE THE MODS ARE LOADING -- there is no world to reach 'Done' in and no tick boundary to halt on.

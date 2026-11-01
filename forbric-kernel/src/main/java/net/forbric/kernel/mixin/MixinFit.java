@@ -577,6 +577,10 @@ public final class MixinFit {
 	private static void injectorAnchors(ClassNode mixin, MethodNode m, AnnotationNode injector, ClassNode target,
 			Function<String, byte[]> resolver, Supplier<ClassNode> withLocals, NativeAbsentTargets.Context nativeView,
 			Supplier<ClassNode> mixinCode, List<Anchor> out) {
+		// require=0 means the injector is optional: Mixin skips it silently when the anchor does not resolve.
+		// Counting such a miss as UNFIT / foreign would mark a mod DEGRADED for a loss native never has.
+		boolean optional = NativeAbsentTargets.nativeMinimum(m, injector,
+				nativeView == null ? -1 : nativeView.defaultRequire()) == 0;
 		// An injector's `method` is a list of CANDIDATE selectors, not a conjunction. Mixin's default
 		// require=1 counts matches across the whole list, so mods routinely ship alternative names to span
 		// mappings or MC versions — Iris's LevelRenderer mixin carries both `lambda$addSkyPass$0` AND
@@ -740,8 +744,13 @@ public final class MixinFit {
 			// the same for the one the kernel now emits and the one that can never exist here.
 			boolean elsewhere = ownedElsewhere(atTarget, target.name);
 			String site = elsewhere ? simpleName(target.name) + "." + hits.get(0).name : hits.get(0).name;
-			out.add(new Anchor("@At(" + atValue + ")", atDetail(atTarget, target.name) + " in " + site, anywhere, false,
-					elsewhere));
+			String desc = atDetail(atTarget, target.name) + " in " + site;
+			// require=0: an unresolved @At is an optional injector Mixin skips silently — not a miss, not foreign.
+			if (!anywhere && optional) {
+				out.add(Anchor.absentNatively(desc));
+				continue;
+			}
+			out.add(new Anchor("@At(" + atValue + ")", desc, anywhere, false, elsewhere));
 		}
 	}
 
