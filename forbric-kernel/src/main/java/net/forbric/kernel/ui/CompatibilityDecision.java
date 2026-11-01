@@ -69,6 +69,10 @@ public final class CompatibilityDecision {
 
 	/** Boot integration: false means the caller must stop before entering the game. */
 	public static boolean check(boolean isClient) {
+		// Settle held-back plugin-declined attributions first: the decision boundary is the earliest point at which
+		// a launch can stop, and until these are settled the stale DEGRADED mark attribute() left behind is still
+		// promotable into a CONFIRMED required finding. KernelLoadReport calls resolve() again later; it is idempotent.
+		net.forbric.kernel.mixin.PluginDeclinedMixins.resolve();
 		CompatibilityFindings.observeInitializationFailures();
 		return decide(CompatibilityFindings.confirmedRequired(), isClient);
 	}
