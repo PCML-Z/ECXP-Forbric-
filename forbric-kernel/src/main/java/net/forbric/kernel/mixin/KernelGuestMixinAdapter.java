@@ -323,7 +323,7 @@ public final class KernelGuestMixinAdapter {
 								MixinConfigOwners.describe(configName), mixin, String.join(", ", shown.foreign()));
 						ForeignMixinBreaks.record(configName, mixin, shown.foreign());
 						attribute(configName, "its mixin " + mixin + " targets another mod's class that has changed ("
-								+ String.join(", ", shown.foreign()) + ")");
+								+ String.join(", ", shown.foreign()) + ")", pkg, mixin, pluginClass, classBytes);
 						preflight(configName, pkg, mixin, pluginClass, classBytes, required,
 								"preflight could not resolve this mixin's anchors on another mod", shown.foreign());
 					} else if (shown.verdict() == MixinFit.Verdict.PARTIAL) {
@@ -704,8 +704,16 @@ public final class KernelGuestMixinAdapter {
 	 * {@link ModCatalog} — when the config has exactly one owner. A config nobody or more than one mod claims
 	 * marks nobody: a confidently wrong name is worse than none. Only for what is not a finding of its own; a
 	 * CONFIRMED finding reaches the row through the catalogue's projection.
+	 *
+	 * <p>Held back for the config's plugin when it has one. attribute() runs in the preflight pass, before Mixin
+	 * has asked shouldApplyMixin; writing the row here used to leave a DEGRADED mark that settle() could not take
+	 * back when the plugin then declined that very mixin, and observeInitializationFailures promoted the stale row
+	 * into a CONFIRMED required loss. Without a plugin there is nothing to ask, so mark immediately as before.
 	 */
-	private static void attribute(String configName, String detail) {
+	private static void attribute(String configName, String detail, String pkg, String mixin, String pluginClass,
+			byte[] classBytes) {
+		if (PluginDeclinedMixins.deferMark(configName, pluginClass, pkg + "." + mixin,
+				dottedTargets(classBytes), detail)) return;
 		String modId = MixinConfigOwners.modIdOf(configName);
 		if (modId != null) ModCatalog.mark(modId, ModCatalog.Status.DEGRADED, detail);
 	}

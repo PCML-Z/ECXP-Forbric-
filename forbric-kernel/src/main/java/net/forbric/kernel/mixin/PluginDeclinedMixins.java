@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.forbric.api.CompatibilityFinding;
+import net.forbric.api.ModCatalog;
 import net.forbric.kernel.util.ForbricLog;
 
 /**
@@ -70,6 +71,18 @@ public final class PluginDeclinedMixins {
 	}
 
 	private static final List<Pending> PENDING = java.util.Collections.synchronizedList(new ArrayList<>());
+	/** ModCatalog DEGRADED marks held back for the same plugin answer; see deferMark. */
+	private static final List<PendingMark> MARKS = java.util.Collections.synchronizedList(new ArrayList<>());
+
+	/**
+	 * One held-back catalogue mark. attribute() used to write ModCatalog.mark(DEGRADED) immediately, in the
+	 * preflight pass, before anyone could ask the mod's own plugin; when the plugin later declined that mixin,
+	 * settle() could discharge the finding but the DEGRADED row was already written and
+	 * observeInitializationFailures promoted it into a CONFIRMED required loss at the launch boundary.
+	 */
+	record PendingMark(String configName, String pluginClass, String mixinClass, List<String> targets, String detail) {
+	}
+
 	/** Dotted plugin class name → the instance Mixin built. */
 	private static final Map<String, Object> PLUGINS = new ConcurrentHashMap<>();
 
@@ -120,17 +133,42 @@ public final class PluginDeclinedMixins {
 	}
 
 	/**
+	 * Holds a ModCatalog DEGRADED attribution back until the plugin can be asked, exactly like {@link #defer}.
+	 *
+	 * @return true when the mark was deferred; the caller must not write it in that case
+	 */
+	static boolean deferMark(String configName, String pluginClass, String mixinClass, List<String> targets,
+			String detail) {
+		if (!enabled() || pluginClass == null || pluginClass.isEmpty()) return false;
+		MARKS.add(new PendingMark(configName, pluginClass, mixinClass, List.copyOf(targets), detail));
+		return true;
+	}
+
+	/**
 	 * Settles every held-back attribution. Idempotent, and safe to call from any of the load report's writers:
 	 * each pending entry is removed before it is settled, so a second call has nothing to do.
 	 */
 	public static void resolve() {
 		List<Pending> batch;
+		List<PendingMark> marks;
 		synchronized (PENDING) {
-			if (PENDING.isEmpty()) return;
 			batch = new ArrayList<>(PENDING);
 			PENDING.clear();
 		}
+		synchronized (MARKS) {
+			marks = new ArrayList<>(MARKS);
+			MARKS.clear();
+		}
 
+		for (PendingMark m : marks) {
+			try {
+				settleMark(m);
+			} catch (Throwable t) {
+				ForbricLog.debug("[Forbric/Mixin] could not settle the catalogue mark for %s — %s", m.mixinClass(),
+						String.valueOf(t));
+				markDegraded(m.configName(), m.detail());
+			}
+		}
 		for (Pending p : batch) {
 			try {
 				settle(p);
@@ -142,6 +180,31 @@ public final class PluginDeclinedMixins {
 						p.required(), p.evidence());
 			}
 		}
+	}
+
+	/**
+	 * One held-back mark: cleared only by a clear {@code false} for EVERY target, written on anything else.
+	 * Mirrors {@link #settle} so a plugin that declines the mixin leaves neither a finding nor a DEGRADED row.
+	 */
+	private static void settleMark(PendingMark m) {
+		List<String> declined = new ArrayList<>();
+		List<String> wanted = new ArrayList<>();
+		for (String target : m.targets()) {
+			if (Boolean.FALSE.equals(askThePlugin(m.pluginClass(), m.mixinClass(), target))) declined.add(target);
+			else wanted.add(target);
+		}
+		if (!declined.isEmpty() && wanted.isEmpty()) {
+			ForbricLog.info("[Forbric/Mixin] not marking %s for %s — the mod's own config plugin %s does not "
+					+ "apply that mixin on this instance either", String.valueOf(MixinConfigOwners.modIdOf(m.configName())),
+					m.mixinClass(), m.pluginClass());
+			return;
+		}
+		markDegraded(m.configName(), m.detail());
+	}
+
+	private static void markDegraded(String configName, String detail) {
+		String modId = MixinConfigOwners.modIdOf(configName);
+		if (modId != null) ModCatalog.mark(modId, ModCatalog.Status.DEGRADED, detail);
 	}
 
 	/**
@@ -191,14 +254,18 @@ public final class PluginDeclinedMixins {
 	 * compiled against Mixin's extensibility interface from here. Any failure answers null, which attributes.
 	 */
 	private static Boolean askThePlugin(Pending p, String target) {
-		Object plugin = PLUGINS.get(p.pluginClass());
+		return askThePlugin(p.pluginClass(), p.mixinClass(), target);
+	}
+
+	private static Boolean askThePlugin(String pluginClass, String mixinClass, String target) {
+		Object plugin = PLUGINS.get(pluginClass);
 		if (plugin == null) return null;
 		try {
 			Method m = plugin.getClass().getMethod("shouldApplyMixin", String.class, String.class);
-			Object answer = m.invoke(plugin, target, p.mixinClass());
+			Object answer = m.invoke(plugin, target, mixinClass);
 			return answer instanceof Boolean b ? b : null;
 		} catch (Throwable noAnswer) {
-			ForbricLog.debug("[Forbric/Mixin] could not ask %s about %s — %s", p.pluginClass(), p.mixinClass(),
+			ForbricLog.debug("[Forbric/Mixin] could not ask %s about %s — %s", pluginClass, mixinClass,
 					String.valueOf(noAnswer));
 			return null;
 		}
@@ -206,12 +273,13 @@ public final class PluginDeclinedMixins {
 
 	/** How many attributions are still waiting on a plugin; a test and diagnostics seam. */
 	static int pending() {
-		return PENDING.size();
+		return PENDING.size() + MARKS.size();
 	}
 
 	/** Test seam: forget every captured plugin and pending attribution. */
 	static void reset() {
 		PENDING.clear();
+		MARKS.clear();
 		PLUGINS.clear();
 	}
 }

@@ -286,7 +286,49 @@ class PluginDeclinedMixinsTest {
 		return cw.toByteArray();
 	}
 
+	@Test
+	void aCatalogueMarkIsHeldBackToo() {
+		assertTrue(deferMark(DecliningPlugin.class), "a config with a plugin defers the ModCatalog mark");
+		assertEquals(1, PluginDeclinedMixins.pending());
+		assertTrue(ModCatalog.failures().isEmpty(),
+				"attribute() must not write a DEGRADED row before the plugin is asked");
+	}
+
+	@Test
+	void aPluginThatDeclinesTheMixinLeavesNoDegradedRow() {
+		PluginDeclinedMixins.rememberPlugin(new DecliningPlugin());
+		deferMark(DecliningPlugin.class);
+
+		PluginDeclinedMixins.resolve();
+
+		assertTrue(ModCatalog.failures().isEmpty(),
+				"a plugin-declined mixin must leave neither a finding nor a stale DEGRADED row to be promoted");
+		assertEquals(0, PluginDeclinedMixins.pending());
+	}
+
+	@Test
+	void aPluginThatWantsTheMixinStillWritesTheDegradedRow() {
+		PluginDeclinedMixins.rememberPlugin(new AcceptingPlugin());
+		deferMark(AcceptingPlugin.class);
+
+		PluginDeclinedMixins.resolve();
+
+		assertEquals(1, ModCatalog.failures().size(), "an accepted mixin's loss is a real loss");
+		assertEquals(ModCatalog.Status.DEGRADED, ModCatalog.failures().getFirst().status());
+	}
+
+	@Test
+	void aMarkWithoutAPluginIsNotDeferred() {
+		assertFalse(PluginDeclinedMixins.deferMark(CONFIG, null, MIXIN_CLASS, List.of(TARGET), DETAIL),
+				"with no plugin there is nobody to ask, so the caller must mark the mod itself");
+		assertEquals(0, PluginDeclinedMixins.pending());
+	}
+
 	private static boolean defer(Class<?> plugin) {
 		return PluginDeclinedMixins.defer(CONFIG, plugin.getName(), MIXIN_ENTRY, MIXIN_CLASS, TARGET, DETAIL);
+	}
+
+	private static boolean deferMark(Class<?> plugin) {
+		return PluginDeclinedMixins.deferMark(CONFIG, plugin.getName(), MIXIN_CLASS, List.of(TARGET), DETAIL);
 	}
 }
