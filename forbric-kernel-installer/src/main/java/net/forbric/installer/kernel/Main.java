@@ -28,7 +28,7 @@ import java.nio.file.Path;
  *       --artifacts DIR      developers only: game jars already built from source, used instead of building
  *       --jdk PATH           a JVM to build the game artifacts with
  *       --remote             take Forbric's jars from the release even if they are carried here
- *       --release TAG        install a specific release (this discards the compiled-in manifest pin)
+ *       --release TAG        install a specific release (a different tag than the pin describes discards it)
  *       --mirror PREFIX      a relay in front of github.com, for networks where it is slow or blocked
  *       --offline            never touch the network for Forbric's own jars
  *   java -jar forbric-kernel-installer.jar --doctor [options]    # check only, writes nothing
@@ -172,7 +172,7 @@ public final class Main {
 				+ "+) to build the game artifacts with");
 		out.println("  --doctor         report whether an install would work here, and write nothing");
 		out.println("  --remote         take Forbric's jars from the release even if carried here");
-		out.println("  --release TAG    install a specific release (discards the compiled-in manifest pin)");
+		out.println("  --release TAG    install a specific release (a different tag discards the compiled-in pin)");
 		out.println("  --mirror PREFIX  a relay in front of github.com (e.g. https://ghproxy.example/)");
 		out.println("  --offline        never touch the network for Forbric's own jars");
 	}

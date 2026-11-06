@@ -120,9 +120,12 @@ public final class MixinFitReport {
 						tally.merge(r.verdict(), 1, Integer::sum);
 						if (r.shouldSuppress() || verbose) {
 							byVerdict.computeIfAbsent(r.verdict().name(), k -> new ArrayList<>())
-									.add(String.format("%-58s %s%s", cfg.getKey() + ":" + entry, r.reason(), r.nativeAbsent().isEmpty()
+									.add(String.format("%-58s %s%s%s", cfg.getKey() + ":" + entry, r.reason(), r.nativeAbsent().isEmpty()
 											? "" : " (" + NativeAbsentTargets.describe(platform) + " lacks too, dropped as native drops it: "
-													+ String.join(", ", r.nativeAbsent()) + ")"));
+													+ String.join(", ", r.nativeAbsent()) + ")",
+											r.optionalSkipped().isEmpty()
+											? "" : " (optional injector, require=0, skipped as Mixin skips it: "
+													+ String.join(", ", r.optionalSkipped()) + ")"));
 						}
 					}
 				}

@@ -417,7 +417,7 @@ Fabric mod 的配置界面只在一个地方声明：一个实现 Mod Menu 的 `
 
 ## 13. 安装器 —— `forbric-kernel-installer/`
 
-纯 JDK 实现，没有依赖，字节码 release 17，版本 `0.2`。只安装 Minecraft 26.2。
+纯 JDK 实现，没有依赖，字节码 release 17，版本 `0.31`。只安装 Minecraft 26.2。
 
 ```
 java -jar forbric-kernel-installer.jar                     # window (InstallerGui)

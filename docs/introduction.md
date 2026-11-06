@@ -952,7 +952,7 @@ script to `-Dforbric.dependencyDialog=off`).
 
 ## 13. The installer — `forbric-kernel-installer/`
 
-Pure JDK, no dependencies, bytecode release 17, version `0.2`. It installs Minecraft 26.2 only.
+Pure JDK, no dependencies, bytecode release 17, version `0.31`. It installs Minecraft 26.2 only.
 
 ```
 java -jar forbric-kernel-installer.jar                     # window (InstallerGui)

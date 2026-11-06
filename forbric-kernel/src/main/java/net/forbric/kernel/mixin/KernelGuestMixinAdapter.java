@@ -284,6 +284,13 @@ public final class KernelGuestMixinAdapter {
 							+ "merged-base loss", MixinConfigOwners.describe(configName), mixin,
 							String.join(", ", fit.nativeAbsent()), NativeAbsentTargets.describe(platform));
 				}
+				if (!fit.optionalSkipped().isEmpty()) {
+					// A different reason for the same outcome: the injector itself declares require=0, so Mixin skips
+					// an unresolved anchor silently. Nothing here claims the target is absent from the mod's platform.
+					ForbricLog.info("[Forbric/Mixin] guest mixin %s:%s names %s on an optional injector (require=0); "
+							+ "Mixin skips it without a word, and so will this boot — not a merged-base loss",
+							MixinConfigOwners.describe(configName), mixin, String.join(", ", fit.optionalSkipped()));
+				}
 				if (!fit.shouldSuppress()) {
 					// An injector Mixin rejects outright fails this mixin whichever class its other misses are on, so one kept
 					// for a miss on another mod's class answers it first, as a PARTIAL one does below; what is left is judged

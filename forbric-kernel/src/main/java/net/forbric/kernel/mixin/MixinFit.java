@@ -150,16 +150,24 @@ public final class MixinFit {
 	 * @param unresolved    human-readable anchors that did not resolve, for the log
 	 * @param resolved      how many anchors resolved
 	 * @param total         how many anchors were checked
-	 * @param nativeAbsent  injector targets the mod's own platform lacks too, which native Mixin drops without a word
+	 * @param nativeAbsent  anchors the mod's own platform lacks too, which native Mixin drops without a word
 	 *                      ({@link NativeAbsentTargets}); counted in none of the above, so they decide nothing
+	 * @param optionalSkipped anchors on an optional ({@code require=0}) injector that Mixin skips silently; also
+	 *                      counted in none of the above, and reported separately from {@code nativeAbsent}
 	 * @param soft          how many of {@code unresolved} are soft: an injector bound only where nothing runs, a drifted
 	 *                      anonymous target — reasons for PARTIAL, never for UNFIT
 	 * @param rejected      the injectors among the misses that Mixin will reject outright ({@link Rejection})
 	 */
 	public record Result(Verdict verdict, List<String> unresolved, int resolved, int total,
-			List<String> foreign, List<String> nativeAbsent, int soft, List<Rejection> rejected) {
+			List<String> foreign, List<String> nativeAbsent, int soft, List<Rejection> rejected,
+			List<String> optionalSkipped) {
 		public Result(Verdict verdict, List<String> unresolved, int resolved, int total, List<String> foreign) {
-			this(verdict, unresolved, resolved, total, foreign, List.of(), 0, List.of());
+			this(verdict, unresolved, resolved, total, foreign, List.of(), 0, List.of(), List.of());
+		}
+
+		public Result(Verdict verdict, List<String> unresolved, int resolved, int total, List<String> foreign,
+				List<String> nativeAbsent, int soft, List<Rejection> rejected) {
+			this(verdict, unresolved, resolved, total, foreign, nativeAbsent, soft, rejected, List.of());
 		}
 
 		/** The anchors that did not resolve at all: {@code unresolved} without the soft ones. */
@@ -325,6 +333,7 @@ public final class MixinFit {
 		List<String> unresolved = new ArrayList<>();
 		List<String> orphaned = new ArrayList<>();
 		List<String> nativeAbsent = new ArrayList<>();
+		List<String> optionalSkipped = new ArrayList<>();
 		int resolved = 0;
 		int total = 0;
 		int softMisses = 0;
@@ -375,6 +384,10 @@ public final class MixinFit {
 					nativeAbsent.add(anchor.describe(targetName));
 					continue;
 				}
+				if (anchor.optionalSkip) {
+					optionalSkipped.add(anchor.describe(targetName));
+					continue;
+				}
 				total++;
 				if (anchor.rejectedBy != null) rejectedIn.putIfAbsent(anchor.rejectedBy, anchor.describe(targetName));
 				if (anchor.injector != null && (anchor.resolved || anchor.bound)) boundIn.add(anchor.injector);
@@ -393,13 +406,14 @@ public final class MixinFit {
 		// An orphaned @Shadow field is the silent case: it resolves (the field is still declared) and then reads
 		// null at runtime. It outranks the count-based verdicts precisely because nothing else detects it.
 		List<String> absent = List.copyOf(nativeAbsent);
-		if (!orphaned.isEmpty()) return new Result(Verdict.HAZARD, orphaned, resolved, total, List.of(), absent, 0, List.of());
-		if (total == 0 || unresolved.isEmpty()) return new Result(Verdict.FIT, List.of(), resolved, total, List.of(), absent, 0, List.of());
+		List<String> skipped = List.copyOf(optionalSkipped);
+		if (!orphaned.isEmpty()) return new Result(Verdict.HAZARD, orphaned, resolved, total, List.of(), absent, 0, List.of(), skipped);
+		if (total == 0 || unresolved.isEmpty()) return new Result(Verdict.FIT, List.of(), resolved, total, List.of(), absent, 0, List.of(), skipped);
 		// UNFIT is "no HARD anchor resolves"; a soft miss alone is PARTIAL, whatever else is there. An injector bound where
 		// nothing runs still bound — it is what resolved before liveness was asked — so it keeps a mixin from UNFIT.
 		boolean anyHardResolved = resolved > 0 || bound > 0 || unresolved.size() == softMisses;
 		return new Result(anyHardResolved ? Verdict.PARTIAL : Verdict.UNFIT, unresolved, resolved, total,
-				List.copyOf(foreign), absent, softMisses, rejections(rejectedIn, boundIn));
+				List.copyOf(foreign), absent, softMisses, rejections(rejectedIn, boundIn), skipped);
 	}
 
 	/** The rejections, in the mixin's own order: each handler once, with whether some target binds it where it fits. */
@@ -432,6 +446,8 @@ public final class MixinFit {
 		 * without a word, so it is reported apart and counted as neither resolved nor missing ({@link NativeAbsentTargets}).
 		 */
 		boolean nativeAbsent;
+		/** An unresolved anchor on a {@code require=0} injector: Mixin skips it silently, with no platform claim. */
+		boolean optionalSkip;
 		/** The {@code @Group} the injector naming this anchor belongs to, or {@code null}; see {@link #settleGroups}. */
 		String group;
 		/** The injector whose target selectors this anchor is, for an {@code @Inject target} anchor; null otherwise. */
@@ -471,6 +487,13 @@ public final class MixinFit {
 		static Anchor absentNatively(String detail) {
 			Anchor anchor = new Anchor("@Inject target", detail, false);
 			anchor.nativeAbsent = true;
+			return anchor;
+		}
+
+		/** An unresolved anchor on a require=0 injector; native Mixin skips it with no platform claim to make. */
+		static Anchor optionalMiss(String detail) {
+			Anchor anchor = new Anchor("@Inject target", detail, false);
+			anchor.optionalSkip = true;
 			return anchor;
 		}
 
@@ -705,7 +728,12 @@ public final class MixinFit {
 			String atTarget = asString(value(at, "target"));
 			if (atTarget == null || atValue == null) continue;
 			if ("NEW".equals(atValue)) {
-				out.add(newAnchor(injector, m, atTarget, hits, target.methods));
+				Anchor anchored = newAnchor(injector, m, atTarget, hits, target.methods);
+				// require=0: an unresolved NEW is an optional injector Mixin skips silently. The @At loop below
+				// softens its misses the same way; without this, a require=0 @WrapOperation(NEW) reads as a hard
+				// miss, goes PARTIAL/UNFIT, and marks the mod DEGRADED for a loss native never has.
+				if (!anchored.resolved && optional) anchored.optionalSkip = true;
+				out.add(anchored);
 				continue;
 			}
 			if (!RESOLVABLE_AT.contains(atValue)) continue;
@@ -747,7 +775,7 @@ public final class MixinFit {
 			String desc = atDetail(atTarget, target.name) + " in " + site;
 			// require=0: an unresolved @At is an optional injector Mixin skips silently — not a miss, not foreign.
 			if (!anywhere && optional) {
-				out.add(Anchor.absentNatively(desc));
+				out.add(Anchor.optionalMiss(desc));
 				continue;
 			}
 			out.add(new Anchor("@At(" + atValue + ")", desc, anywhere, false, elsewhere));

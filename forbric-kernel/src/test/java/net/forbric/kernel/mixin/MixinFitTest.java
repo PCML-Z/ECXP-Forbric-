@@ -17,6 +17,7 @@
 package net.forbric.kernel.mixin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -405,6 +406,11 @@ class MixinFitTest {
 
 	/** A mixin {@code @WrapOperation(method="build", at=@At(NEW, target=type))} whose handler takes {@code arity} ints + Operation. */
 	private static byte[] wrappingNew(String type, int arity) {
+		return wrappingNew(type, arity, -1);
+	}
+
+	/** As above, with an explicit {@code require} on the injector (negative omits it). */
+	private static byte[] wrappingNew(String type, int arity, int require) {
 		org.objectweb.asm.ClassWriter cw = new org.objectweb.asm.ClassWriter(org.objectweb.asm.ClassWriter.COMPUTE_MAXS);
 		cw.visit(org.objectweb.asm.Opcodes.V21, org.objectweb.asm.Opcodes.ACC_PUBLIC, "test/TheMixin", null, "java/lang/Object", null);
 		org.objectweb.asm.AnnotationVisitor mixin = cw.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", false);
@@ -420,6 +426,7 @@ class MixinFitTest {
 		org.objectweb.asm.AnnotationVisitor method = wrap.visitArray("method");
 		method.visit(null, "build");
 		method.visitEnd();
+		if (require >= 0) wrap.visit("require", require);
 		org.objectweb.asm.AnnotationVisitor at = wrap.visitAnnotation("at", "Lorg/spongepowered/asm/mixin/injection/At;");
 		at.visit("value", "NEW");
 		at.visit("target", "L" + type + ";");
@@ -455,6 +462,34 @@ class MixinFitTest {
 		MixinFit.Result noMethod = MixinFit.evaluate(wrappingNew(type, 11), none);
 		assertEquals(MixinFit.Verdict.UNFIT, noMethod.verdict(), "no `build` method at all: the selector misses, as before");
 		assertEquals(1, noMethod.unresolved().size(), "and no NEW anchor is added for a selector that bound nowhere: " + noMethod.unresolved());
+	}
+
+	/**
+	 * require=0 must reach the NEW branch too: @At(NEW) returns from the @At loop early, and used to bypass the
+	 * optional softening applied to every other unresolved @At. Native Mixin silently skips an optional injector
+	 * whose constructor arity does not match; counting it as a hard miss went PARTIAL and marked the mod DEGRADED.
+	 */
+	@Test
+	void anOptionalWrapOperationOnNewIsNotAMiss() {
+		String type = "net/example/Snippet";
+		java.util.function.Function<String, byte[]> twelve = name -> "net/example/Builder.class".equals(name) ? constructing(type, 12) : null;
+
+		MixinFit.Result required = MixinFit.evaluate(wrappingNew(type, 11, 1), twelve);
+		assertEquals(MixinFit.Verdict.PARTIAL, required.verdict(), "require=1: the arity mismatch is a real miss — "
+				+ required.unresolved());
+		assertEquals(1, required.hardUnresolved(), required.unresolved().toString());
+
+		MixinFit.Result optional = MixinFit.evaluate(wrappingNew(type, 11, 0), twelve);
+		assertEquals(MixinFit.Verdict.FIT, optional.verdict(), "require=0: native Mixin drops this injector without a word — "
+				+ optional.unresolved());
+		assertTrue(optional.unresolved().isEmpty(), optional.unresolved().toString());
+		assertTrue(optional.foreign().isEmpty(), optional.foreign().toString());
+		assertFalse(optional.optionalSkipped().isEmpty(), "the skipped anchor is still reported apart from the verdict");
+		assertTrue(optional.nativeAbsent().isEmpty(),
+				"an optional skip is not a claim that the mod's own platform lacks the target");
+
+		MixinFit.Result defaulted = MixinFit.evaluate(wrappingNew(type, 11), twelve);
+		assertEquals(MixinFit.Verdict.PARTIAL, defaulted.verdict(), "no explicit require keeps the old verdict");
 	}
 
 	/**
