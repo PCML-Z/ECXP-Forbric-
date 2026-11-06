@@ -646,7 +646,7 @@ java -cp <boot-cp> net.forbric.kernel.boot.Main --scan --mods <dir> --report out
 
   - **DEGRADED 算通过。** 一个加载了但有一部分没生效的 mod —— 入口没跑、mixin 只应用了一半 —— 也算在那 89.0% 里，只被标成 DEGRADED。把这类排除掉的口径是 79.1%。
   - **分母是 jar，不是内容 mod。** 每批（110 / 97 / 104）把必需的依赖也算了进去，所以纯库、纯 API、纯数据包 jar 和真正的 mod 并列在同一个分母里。89.0% 不等于"你会坐下来玩的 mod 里有 89% 能用"。
-- **版本。** `forbric-kernel/build.gradle` 写的是 `0.1.0-SNAPSHOT`；安装器是 `0.30`，只接受 Minecraft 26.2。`net.forbric.api` 是内部 API，随时可能变动，不另行通知。
+- **版本。** `forbric-kernel/build.gradle` 写的是 `0.1.0-SNAPSHOT`；安装器是 `0.31`，只接受 Minecraft 26.2。`net.forbric.api` 是内部 API，随时可能变动，不另行通知。
 
 ## 20. 延伸阅读
 

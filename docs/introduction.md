@@ -1293,7 +1293,7 @@ Break one and the failure usually surfaces far from the cause.
   - **The denominator is jars, not content mods.** Each batch (110 / 97 / 104) counts required dependencies, so
     library-only, API-only and datapack-only jars sit in it next to real ones. 89.0 % is not "89 % of the mods you
     would sit down and play work".
-- **Versions.** `forbric-kernel/build.gradle` says `0.1.0-SNAPSHOT`; the installer is `0.30` and accepts Minecraft 26.2 only. `net.forbric.api`
+- **Versions.** `forbric-kernel/build.gradle` says `0.1.0-SNAPSHOT`; the installer is `0.31` and accepts Minecraft 26.2 only. `net.forbric.api`
   is internal and changes without notice.
 
 ## 20. Further reading
