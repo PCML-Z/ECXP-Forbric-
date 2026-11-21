@@ -192,11 +192,19 @@ def native_command(family, image, java_args):
 def terminate_owned(process):
     if process.poll() is not None:
         return
-    os.killpg(process.pid, signal.SIGTERM)
+    # The child may exit between poll() and the signal; preserve its real status instead of crashing.
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
     try:
         process.wait(15)
     except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGKILL); process.wait(10)
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(10)
 
 
 def run_control(family, engine, timeout):

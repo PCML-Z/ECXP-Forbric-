@@ -388,7 +388,12 @@ def verified_run(root, artifacts, mods, output, command, release=False):
               "inputFailure": drift, "elapsedSeconds": time.monotonic() - started, "unpassedGates": unpassed,
               "commandPassed": code == 0 and drift is None and not (release and unpassed),
               "log": str(log), "manifest": str(output)}
-    output.with_suffix(".result.json").write_text(json.dumps(result, indent=2) + "\n")
+    # Atomic like the manifest above: an evidence run can be SIGKILLed on timeout, and a half-written
+    # result.json used to surface as a blanket JSONDecodeError in the next gate that read it.
+    result_path = output.with_suffix(".result.json")
+    temporary = result_path.with_name(result_path.name + ".tmp")
+    temporary.write_text(json.dumps(result, indent=2) + "\n")
+    temporary.replace(result_path)
     return result
 
 

@@ -78,6 +78,18 @@ class ModCatalogReasonsTest {
 		assertEquals("a; b; c", detail());
 	}
 
+	/** A null publish retracts the whole catalogue, not just the failures view. */
+	@Test
+	void aNullPublishClearsBothViews() {
+		ModCatalog.publish(List.of(new ModCatalog.Entry(Ecosystem.FABRIC, "itemapi", "Item API", "1.0", "",
+				List.of(), "itemapi.jar", "", "installed")));
+
+		ModCatalog.publish(null);
+
+		assertEquals(List.of(), ModCatalog.everything());
+		assertEquals(List.of(), ModCatalog.failures());
+	}
+
 	private static String detail() {
 		return ModCatalog.failures().stream().filter(e -> e.modId().equals("itemapi")).findFirst()
 				.orElseThrow().statusDetail();

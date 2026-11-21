@@ -148,6 +148,9 @@ public final class ModCatalog {
 	public static synchronized void publish(List<Entry> found) {
 		if (found == null) {
 			entries = List.of();
+			// reset() clears both views; publish(null) must not leave installed()/count() showing the old catalogue
+			// while everything() reports empty. A null publish is a full retraction, not a half one.
+			installed = List.of();
 			return;
 		}
 		List<Entry> sorted = new ArrayList<>();

@@ -51,6 +51,8 @@ public final class MergedBaseLinkGateTest {
 		SuppliedArtifactContentTest.main(new String[] { work.resolve("content").toString() });
 		// And the window's way into the same install: what a player pastes into its path fields.
 		InstallerWindowInputTest.main(new String[] { work.resolve("window").toString() });
+		// The CLI's other entrance: a value-taking option with no value must not eat the next flag.
+		MainArgTest.main(new String[] { work.resolve("cli-args").toString() });
 	}
 
 	/**

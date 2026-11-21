@@ -77,27 +77,33 @@ public final class Main {
 		String releaseTag = null;
 		String mirror = null;
 		String mcVersion = InstallerGui.DEFAULT_VERSION;
-		for (int i = 0; i < args.length; i++) {
-			switch (args[i]) {
-				case "--dir" -> dir = Util.path(require(args, ++i, "--dir"));
-				case "--artifacts" -> artifacts = Util.path(require(args, ++i, "--artifacts"));
-				case "--jdk" -> jdk = Util.path(require(args, ++i, "--jdk"));
-				case "--mc" -> mcVersion = require(args, ++i, "--mc");
-				case "--doctor" -> doctor = true;
-				case "--remote" -> forceRemote = true;
-				case "--offline" -> offline = true;
-				case "--release" -> releaseTag = require(args, ++i, "--release");
-				case "--mirror" -> mirror = require(args, ++i, "--mirror");
-				case "--help", "-h" -> {
-					usage(System.out);
-					return;
-				}
-				default -> {
-					System.err.println("unknown option: " + args[i]);
-					usage(System.err);
-					System.exit(2);
+		try {
+			for (int i = 0; i < args.length; i++) {
+				switch (args[i]) {
+					case "--dir" -> dir = Util.path(require(args, ++i, "--dir"));
+					case "--artifacts" -> artifacts = Util.path(require(args, ++i, "--artifacts"));
+					case "--jdk" -> jdk = Util.path(require(args, ++i, "--jdk"));
+					case "--mc" -> mcVersion = require(args, ++i, "--mc");
+					case "--doctor" -> doctor = true;
+					case "--remote" -> forceRemote = true;
+					case "--offline" -> offline = true;
+					case "--release" -> releaseTag = require(args, ++i, "--release");
+					case "--mirror" -> mirror = require(args, ++i, "--mirror");
+					case "--help", "-h" -> {
+						usage(System.out);
+						return;
+					}
+					default -> {
+						System.err.println("unknown option: " + args[i]);
+						usage(System.err);
+						System.exit(2);
+					}
 				}
 			}
+		} catch (java.nio.file.InvalidPathException badPath) {
+			// The window reports this in its log; the CLI must not answer with a stack trace either.
+			System.err.println("invalid path: " + badPath.getMessage());
+			System.exit(2);
 		}
 		// --doctor answers "would this work here", so it must run on a machine where nothing is set up yet:
 		// --dir is optional and falls back to wherever the launcher would keep Minecraft.
@@ -150,8 +156,11 @@ public final class Main {
 	}
 
 	private static String require(String[] args, int i, String option) {
-		if (i >= args.length) {
+		if (i >= args.length || args[i].startsWith("--")) {
+			// A missing value must not swallow the next option: `--dir --doctor` was creating a directory literally
+			// named "--doctor" and installing into it, while `--release --offline` took "--offline" as a tag.
 			System.err.println(option + " needs a value");
+			usage(System.err);
 			System.exit(2);
 		}
 		return args[i];
